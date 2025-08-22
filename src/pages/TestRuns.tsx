@@ -27,25 +27,25 @@ const TestRuns: React.FC = () => {
   const { users } = useUsers();
   const navigate = useNavigate();
   const selectedProject = getSelectedProject();
-  
+
   // Use tags and configurations from AppContext (loaded once)
   const tags = appState.tags;
   const configurations = appState.configurations;
   const tagsLoading = appState.isLoadingTags;
   const configurationsLoading = appState.isLoadingConfigurations;
-  
-  const { 
-    testRuns, 
-    loading, 
-    error, 
-    pagination, 
-    fetchTestRuns, 
+
+  const {
+    testRuns,
+    loading,
+    error,
+    pagination,
+    fetchTestRuns,
     searchTestRuns,
     filterTestRunsByAssignee,
     filterTestRunsByState,
     filterTestRunsWithMultipleFilters,
-    createTestRun, 
-    updateTestRun, 
+    createTestRun,
+    updateTestRun,
     deleteTestRun,
     closeTestRun
   } = useTestRuns(selectedProject?.id);
@@ -89,14 +89,14 @@ const TestRuns: React.FC = () => {
   const applyFilters = useCallback(async () => {
     setCurrentSearchTerm('');
     setSearchTerm('');
-    
+
     // Apply the filters in the hook first
     applyFiltersHook();
-    
+
     // Check if we have multiple filters to apply
     const hasAssigneeFilter = filters.assignee !== 'all';
     const hasStateFilter = filters.state !== 'all';
-    
+
     if (hasAssigneeFilter || hasStateFilter) {
       // Apply multiple filters
       const multipleFilters: any = {};
@@ -106,7 +106,7 @@ const TestRuns: React.FC = () => {
       if (hasStateFilter) {
         multipleFilters.state = filters.state;
       }
-      
+
       console.log('🔍 Applying multiple filters:', multipleFilters);
       await filterTestRunsWithMultipleFilters(multipleFilters, 1);
     } else {
@@ -127,7 +127,7 @@ const TestRuns: React.FC = () => {
       // Clear search term and current search term
       setSearchTerm('');
       setCurrentSearchTerm('');
-      
+
       // If we have other active filters, apply them; otherwise fetch all
       if (hasActiveFilters() && (appliedFilters.assignee !== 'all' || appliedFilters.state !== 'all')) {
         const multipleFilters: any = {};
@@ -144,10 +144,10 @@ const TestRuns: React.FC = () => {
     } else {
       // Update the specific filter
       updateFilter(filterType, 'all');
-      
+
       // Also clear it from applied filters immediately
       clearFilters();
-      
+
       // Wait a bit for state to update, then check if we still have active filters
       setTimeout(() => {
         // After clearing, just fetch all test runs
@@ -175,7 +175,7 @@ const TestRuns: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      
+
       // Handle new tags creation first
       const processedTags = [];
       for (const tag of data.tags || []) {
@@ -192,7 +192,7 @@ const TestRuns: React.FC = () => {
           processedTags.push(tag);
         }
       }
-      
+
       await createTestRun({
         name: data.name,
         description: data.description,
@@ -204,9 +204,9 @@ const TestRuns: React.FC = () => {
         tags: processedTags,
         testPlanId: data.testPlanId
       });
-      
+
       setIsCreateModalOpen(false);
-      
+
     } catch (error) {
       // Error is already handled in the hook
     } finally {
@@ -222,7 +222,7 @@ const TestRuns: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      
+
       // Handle new tags creation first
       const processedTags = [];
       for (const tag of data.tags || []) {
@@ -239,7 +239,7 @@ const TestRuns: React.FC = () => {
           processedTags.push(tag);
         }
       }
-      
+
       await updateTestRun(selectedTestRun.id, {
         name: data.name,
         description: data.description,
@@ -260,7 +260,7 @@ const TestRuns: React.FC = () => {
 
   const handleDeleteTestRun = useCallback(async () => {
     if (!selectedTestRun) return;
-    
+
     try {
       setIsSubmitting(true);
       await deleteTestRun(selectedTestRun.id);
@@ -294,7 +294,7 @@ const TestRuns: React.FC = () => {
 
   const handleCloseTestRun = useCallback(async () => {
     if (!testRunToClose) return;
-    
+
     try {
       setIsSubmitting(true);
       await closeTestRun(testRunToClose.id);
@@ -328,7 +328,7 @@ const TestRuns: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      
+
       // Determine which test cases to include
       let testCaseIds: string[] = [];
       if (cloneData.includeAllTestCases) {
@@ -338,29 +338,29 @@ const TestRuns: React.FC = () => {
         // This will be implemented when we have the execution results API
         testCaseIds = testRunToClone.testCaseIds;
       }
-      
+
       // Get existing tags if copyTags is enabled
       let existingTags = [];
       if (cloneData.copyTags) {
         try {
           console.log('🏷️ Loading existing tags for cloning test run:', testRunToClone.id);
           const testRunResponse = await testRunsApiService.getTestRun(testRunToClone.id);
-          
+
           // Extract tag IDs from relationships
           const tagRelationships = testRunResponse.data.relationships?.tags?.data || [];
-          
+
           if (tagRelationships.length > 0) {
             for (const tagRef of tagRelationships) {
               const tagId = tagRef.id.split('/').pop();
-              
+
               // Find tag in available tags or included data
               let foundTag = tags.find(tag => tag.id === tagId);
-              
+
               if (!foundTag && testRunResponse.included) {
-                const includedTag = testRunResponse.included.find(item => 
-                  item.type === 'Tag' && item.attributes.id.toString() === tagId
+                const includedTag = testRunResponse.included.find(item =>
+                    item.type === 'Tag' && item.attributes.id.toString() === tagId
                 );
-                
+
                 if (includedTag) {
                   foundTag = {
                     id: includedTag.attributes.id.toString(),
@@ -368,7 +368,7 @@ const TestRuns: React.FC = () => {
                   };
                 }
               }
-              
+
               if (foundTag) {
                 existingTags.push(foundTag);
               }
@@ -379,10 +379,10 @@ const TestRuns: React.FC = () => {
           existingTags = [];
         }
       }
-      
+
       // Get existing configurations (always include them)
       const existingConfigurations = testRunToClone.configurations || [];
-      
+
       console.log('🔄 Cloning test run with data:', {
         name: cloneData.name,
         testCaseIds: testCaseIds.length,
@@ -391,7 +391,7 @@ const TestRuns: React.FC = () => {
         includeAllTestCases: cloneData.includeAllTestCases,
         copyTags: cloneData.copyTags
       });
-      
+
       // Create the cloned test run
       await createTestRun({
         name: cloneData.name,
@@ -403,11 +403,11 @@ const TestRuns: React.FC = () => {
         state: 1, // Set to "New" state for the clone
         tags: existingTags
       });
-      
+
       setIsCloneModalOpen(false);
       setTestRunToClone(null);
       toast.success(`Test run cloned successfully as "${cloneData.name}"`);
-      
+
     } catch (error) {
       console.error('Failed to clone test run:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to clone test run';
@@ -494,361 +494,361 @@ const TestRuns: React.FC = () => {
 
   if (loading && testRuns.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="text-center">
-          <Loader className="w-8 h-8 text-cyan-400 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading test runs...</p>
+        <div className="flex items-center justify-center min-h-96">
+          <div className="text-center">
+            <Loader className="w-8 h-8 text-cyan-400 animate-spin mx-auto mb-4" />
+            <p className="text-gray-400">Loading test runs...</p>
+          </div>
         </div>
-      </div>
     );
   }
 
   if (error && testRuns.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-96">
-        <Card className="p-8 text-center">
-          <div className="text-red-400 mb-4">
-            <p className="text-lg font-medium">Failed to load test runs</p>
-            <p className="text-sm text-gray-400 mt-2">{error}</p>
-          </div>
-          <Button onClick={() => fetchTestRuns(1)}>
-            Try Again
-          </Button>
-        </Card>
-      </div>
+        <div className="flex items-center justify-center min-h-96">
+          <Card className="p-8 text-center">
+            <div className="text-red-400 mb-4">
+              <p className="text-lg font-medium">Failed to load test runs</p>
+              <p className="text-sm text-gray-400 mt-2">{error}</p>
+            </div>
+            <Button onClick={() => fetchTestRuns(1)}>
+              Try Again
+            </Button>
+          </Card>
+        </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-white">Test Runs</h2>
-          <p className="text-gray-400">
-            {selectedProject 
-              ? `Manage test runs for ${selectedProject.name} (${pagination.totalItems} total)` 
-              : `Please select a project to view test runs`
-            }
-          </p>
-          {selectedProject && (
-            <div className="mt-2">
-              <div className="inline-flex items-center px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 rounded-full text-sm text-cyan-400">
-                📁 Project: {selectedProject.name}
-              </div>
-            </div>
-          )}
-        </div>
-        <Button 
-          icon={Plus} 
-          onClick={() => setIsCreateModalOpen(true)}
-          disabled={!selectedProject}
-          title={!selectedProject ? 'Please select a project first' : 'Create new test run'}
-        >
-          New Test Run
-        </Button>
-      </div>
-
-      {/* Show message if no project selected */}
-      {!selectedProject && (
-        <Card className="p-8 text-center">
-          <div className="text-gray-400 mb-4">
-            <Play className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">No project selected</p>
-            <p className="text-sm">Please select a project from the sidebar to view and manage test runs.</p>
-          </div>
-        </Card>
-      )}
-
-      {/* Only show content if project is selected */}
-      {selectedProject && (
-        <>
-          <TestRunsFilters
-            searchTerm={searchTerm}
-            onSearchTermChange={setSearchTerm}
-            onSearchKeyPress={handleSearchKeyPress}
-            currentSearchTerm={currentSearchTerm}
-            filters={filters}
-            appliedFilters={appliedFilters}
-            onFilterChange={updateFilter}
-            onApplyFilters={applyFilters}
-            onClearAllFilters={clearAllFilters}
-            onOpenFiltersSidebar={() => setIsFiltersSidebarOpen(true)}
-            availableUsers={users}
-            onClearIndividualFilter={clearIndividualFilter}
-          />
-
-          {/* Test Runs Table */}
-          <Card className="overflow-hidden">
-            {loading && (
-              <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">
-                <Loader className="w-6 h-6 text-cyan-400 animate-spin" />
-              </div>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-white">Test Runs</h2>
+            <p className="text-gray-400">
+              {selectedProject
+                  ? `Manage test runs for ${selectedProject.name} (${pagination.totalItems} total)`
+                  : `Please select a project to view test runs`
+              }
+            </p>
+            {selectedProject && (
+                <div className="mt-2">
+                  <div className="inline-flex items-center px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 rounded-full text-sm text-cyan-400">
+                    📁 Project: {selectedProject.name}
+                  </div>
+                </div>
             )}
-            
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-800/50 border-b border-slate-700">
-                  <tr>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">ID</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Name</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">State</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Progress</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Test Cases</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Assignee</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Dates</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {testRuns.map((testRun) => (
-                    <tr key={testRun.id} className="border-b border-slate-800 hover:bg-slate-800/30 transition-colors">
-                      <td className="py-4 px-6 text-sm text-gray-300 font-mono">
-                        #{testRun.id}
-                      </td>
-                      <td className="py-4 px-6">
-                        <div>
-                          <button
-                            onClick={() => handleTestRunNameClick(testRun)}
-                            className="text-left w-full group"
-                          >
-                            <h3 className="font-semibold text-white group-hover:text-cyan-400 transition-colors cursor-pointer mb-1">
-                              {testRun.name}
-                            </h3>
-                          </button>
-                          {testRun.description && (
-                            <p className="text-sm text-gray-400 truncate max-w-xs">{testRun.description}</p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
+          </div>
+          <Button
+              icon={Plus}
+              onClick={() => setIsCreateModalOpen(true)}
+              disabled={!selectedProject}
+              title={!selectedProject ? 'Please select a project first' : 'Create new test run'}
+          >
+            New Test Run
+          </Button>
+        </div>
+
+        {/* Show message if no project selected */}
+        {!selectedProject && (
+            <Card className="p-8 text-center">
+              <div className="text-gray-400 mb-4">
+                <Play className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium">No project selected</p>
+                <p className="text-sm">Please select a project from the sidebar to view and manage test runs.</p>
+              </div>
+            </Card>
+        )}
+
+        {/* Only show content if project is selected */}
+        {selectedProject && (
+            <>
+              <TestRunsFilters
+                  searchTerm={searchTerm}
+                  onSearchTermChange={setSearchTerm}
+                  onSearchKeyPress={handleSearchKeyPress}
+                  currentSearchTerm={currentSearchTerm}
+                  filters={filters}
+                  appliedFilters={appliedFilters}
+                  onFilterChange={updateFilter}
+                  onApplyFilters={applyFilters}
+                  onClearAllFilters={clearAllFilters}
+                  onOpenFiltersSidebar={() => setIsFiltersSidebarOpen(true)}
+                  availableUsers={users}
+                  onClearIndividualFilter={clearIndividualFilter}
+              />
+
+              {/* Test Runs Table */}
+              <Card className="overflow-hidden">
+                {loading && (
+                    <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">
+                      <Loader className="w-6 h-6 text-cyan-400 animate-spin" />
+                    </div>
+                )}
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-slate-800/50 border-b border-slate-700">
+                    <tr>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">ID</th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Name</th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">State</th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Progress</th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Test Cases</th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Assignee</th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Dates</th>
+                      <th className="text-left py-4 px-6 text-sm font-medium text-gray-400">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {testRuns.map((testRun) => (
+                        <tr key={testRun.id} className="border-b border-slate-800 hover:bg-slate-800/30 transition-colors">
+                          <td className="py-4 px-6 text-sm text-gray-300 font-mono">
+                            #{testRun.id}
+                          </td>
+                          <td className="py-4 px-6">
+                            <div>
+                              <button
+                                  onClick={() => handleTestRunNameClick(testRun)}
+                                  className="text-left w-full group"
+                              >
+                                <h3 className="font-semibold text-white group-hover:text-cyan-400 transition-colors cursor-pointer mb-1">
+                                  {testRun.name}
+                                </h3>
+                              </button>
+                              {testRun.description && (
+                                  <p className="text-sm text-gray-400 truncate max-w-xs">{testRun.description}</p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStateColor(testRun.state)}`}>
                           {getStateIcon(testRun.state)}
                           <span className="ml-1">{getStateLabel(testRun.state)}</span>
                         </span>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-400">Progress</span>
-                            <span className="text-white font-medium">{testRun.progress}%</span>
-                          </div>
-                          <div className="w-full bg-slate-700 rounded-full h-2">
-                            <div 
-                              className="bg-gradient-to-r from-cyan-400 to-purple-500 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${testRun.progress}%` }}
-                            ></div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-gray-400">
-                            <span>Pass Rate: {testRun.passRate}%</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="space-y-1 text-sm">
-                          <div className="text-white font-medium">{testRun.testCasesCount} total</div>
-                          <div className="flex space-x-2 text-xs">
-                            <span className="text-green-400">{testRun.passedCount} passed</span>
-                            <span className="text-red-400">{testRun.failedCount} failed</span>
-                            {testRun.blockedCount > 0 && (
-                              <span className="text-purple-400">{testRun.blockedCount} blocked</span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center">
-                          <div className="w-8 h-8 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full flex items-center justify-center mr-3">
-                            <User className="w-4 h-4 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-white">{testRun.assignedTo.name}</p>
-                            <p className="text-xs text-gray-400">{testRun.assignedTo.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="space-y-1 text-xs text-gray-400">
-                          <div className="flex items-center">
-                            <Calendar className="w-3 h-3 mr-1" />
-                            <span>Started: {format(testRun.startDate, 'MMM dd, yyyy')}</span>
-                          </div>
-                          {testRun.endDate && (
-                            <div className="flex items-center">
-                              <Clock className="w-3 h-3 mr-1" />
-                              <span>Ended: {format(testRun.endDate, 'MMM dd, yyyy')}</span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-400">Progress</span>
+                                <span className="text-white font-medium">{testRun.progress}%</span>
+                              </div>
+                              <div className="w-full bg-slate-700 rounded-full h-2">
+                                <div
+                                    className="bg-gradient-to-r from-cyan-400 to-purple-500 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${testRun.progress}%` }}
+                                ></div>
+                              </div>
+                              <div className="flex items-center justify-between text-xs text-gray-400">
+                                <span>Pass Rate: {testRun.passRate}%</span>
+                              </div>
                             </div>
-                          )}
-                          {testRun.closedDate && (
-                            <div className="flex items-center">
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              <span>Closed: {format(testRun.closedDate, 'MMM dd, yyyy')}</span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="space-y-1 text-sm">
+                              <div className="text-white font-medium">{testRun.testCasesCount} total</div>
+                              <div className="flex space-x-2 text-xs">
+                                <span className="text-green-400">{testRun.passedCount} passed</span>
+                                <span className="text-red-400">{testRun.failedCount} failed</span>
+                                {testRun.blockedCount > 0 && (
+                                    <span className="text-purple-400">{testRun.blockedCount} blocked</span>
+                                )}
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => openEditModal(testRun)}
-                            className="p-2 text-gray-400 hover:text-cyan-400 hover:bg-slate-700 rounded-lg transition-colors"
-                            title="Edit"
-                            disabled={isSubmitting}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => openCloneModal(testRun)}
-                            className="p-2 text-gray-400 hover:text-green-400 hover:bg-slate-700 rounded-lg transition-colors"
-                            title="Clone Test Run"
-                            disabled={isSubmitting}
-                          >
-                            <Copy className="w-4 h-4" />
-                          </button>
-                          {testRun.state !== 6 && ( // Only show close button if not already closed
-                            <button
-                              onClick={() => openCloseModal(testRun)}
-                              className="p-2 text-gray-400 hover:text-orange-400 hover:bg-slate-700 rounded-lg transition-colors"
-                              title="Close Test Run"
-                              disabled={isSubmitting}
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => openDeleteDialog(testRun)}
-                            className="p-2 text-gray-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
-                            title="Delete"
-                            disabled={isSubmitting}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              
-              {testRuns.length === 0 && !loading && (
-                <div className="text-center py-12">
-                  <div className="text-gray-400 mb-4">
-                    <Play className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg font-medium">No test runs found</p>
-                    <p className="text-sm">
-                      {currentSearchTerm 
-                        ? `No test runs found matching "${currentSearchTerm}". Try a different search term or create a new test run.`
-                        : 'No test runs found for this project. Create your first test run to get started.'
-                      }
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center">
+                              <div className="w-8 h-8 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full flex items-center justify-center mr-3">
+                                <User className="w-4 h-4 text-white" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-white">{testRun.assignedTo.name}</p>
+                                <p className="text-xs text-gray-400">{testRun.assignedTo.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="space-y-1 text-xs text-gray-400">
+                              <div className="flex items-center">
+                                <Calendar className="w-3 h-3 mr-1" />
+                                <span>Started: {format(testRun.startDate, 'MMM dd, yyyy')}</span>
+                              </div>
+                              {testRun.endDate && (
+                                  <div className="flex items-center">
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    <span>Ended: {format(testRun.endDate, 'MMM dd, yyyy')}</span>
+                                  </div>
+                              )}
+                              {testRun.closedDate && (
+                                  <div className="flex items-center">
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    <span>Closed: {format(testRun.closedDate, 'MMM dd, yyyy')}</span>
+                                  </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                  onClick={() => openEditModal(testRun)}
+                                  className="p-2 text-gray-400 hover:text-cyan-400 hover:bg-slate-700 rounded-lg transition-colors"
+                                  title="Edit"
+                                  disabled={isSubmitting}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                  onClick={() => openCloneModal(testRun)}
+                                  className="p-2 text-gray-400 hover:text-green-400 hover:bg-slate-700 rounded-lg transition-colors"
+                                  title="Clone Test Run"
+                                  disabled={isSubmitting}
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              {testRun.state !== 6 && ( // Only show close button if not already closed
+                                  <button
+                                      onClick={() => openCloseModal(testRun)}
+                                      className="p-2 text-gray-400 hover:text-orange-400 hover:bg-slate-700 rounded-lg transition-colors"
+                                      title="Close Test Run"
+                                      disabled={isSubmitting}
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                  </button>
+                              )}
+                              <button
+                                  onClick={() => openDeleteDialog(testRun)}
+                                  className="p-2 text-gray-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
+                                  title="Delete"
+                                  disabled={isSubmitting}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                    ))}
+                    </tbody>
+                  </table>
 
-            {/* Pagination */}
-            {pagination.totalPages > 1 && (
-              <div className="border-t border-slate-700 px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-400">
-                    Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
-                    {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of{' '}
-                    {pagination.totalItems} test runs
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handlePageChange(pagination.currentPage - 1)}
-                      disabled={pagination.currentPage === 1 || loading}
-                      icon={ChevronLeft}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-sm text-gray-400">
+                  {testRuns.length === 0 && !loading && (
+                      <div className="text-center py-12">
+                        <div className="text-gray-400 mb-4">
+                          <Play className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg font-medium">No test runs found</p>
+                          <p className="text-sm">
+                            {currentSearchTerm
+                                ? `No test runs found matching "${currentSearchTerm}". Try a different search term or create a new test run.`
+                                : 'No test runs found for this project. Create your first test run to get started.'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                  )}
+                </div>
+
+                {/* Pagination */}
+                {pagination.totalPages > 1 && (
+                    <div className="border-t border-slate-700 px-6 py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-400">
+                          Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
+                          {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of{' '}
+                          {pagination.totalItems} test runs
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handlePageChange(pagination.currentPage - 1)}
+                              disabled={pagination.currentPage === 1 || loading}
+                              icon={ChevronLeft}
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-sm text-gray-400">
                       Page {pagination.currentPage} of {pagination.totalPages}
                     </span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handlePageChange(pagination.currentPage + 1)}
-                      disabled={pagination.currentPage === pagination.totalPages || loading}
-                      icon={ChevronRight}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </Card>
-        </>
-      )}
+                          <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handlePageChange(pagination.currentPage + 1)}
+                              disabled={pagination.currentPage === pagination.totalPages || loading}
+                              icon={ChevronRight}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                )}
+              </Card>
+            </>
+        )}
 
-      <TestRunsFiltersSidebar
-        isOpen={isFiltersSidebarOpen}
-        onClose={() => setIsFiltersSidebarOpen(false)}
-        filters={filters}
-        onFilterChange={updateFilter}
-        onApplyFilters={applyFilters}
-        onClearAllFilters={clearAllFilters}
-        availableUsers={users}
-      />
+        <TestRunsFiltersSidebar
+            isOpen={isFiltersSidebarOpen}
+            onClose={() => setIsFiltersSidebarOpen(false)}
+            filters={filters}
+            onFilterChange={updateFilter}
+            onApplyFilters={applyFilters}
+            onClearAllFilters={clearAllFilters}
+            availableUsers={users}
+        />
 
-      {/* Modals */}
-      <CreateTestRunModal
-        isOpen={isCreateModalOpen}
-        onClose={closeCreateModal}
-        onSubmit={handleCreateTestRun}
-        isSubmitting={isSubmitting}
-        availableTags={tags}
-        onCreateTag={createTag}
-        tagsLoading={tagsLoading}
-      />
+        {/* Modals */}
+        <CreateTestRunModal
+            isOpen={isCreateModalOpen}
+            onClose={closeCreateModal}
+            onSubmit={handleCreateTestRun}
+            isSubmitting={isSubmitting}
+            availableTags={tags}
+            onCreateTag={createTag}
+            tagsLoading={tagsLoading}
+        />
 
-      <EditTestRunModal
-        isOpen={isEditModalOpen}
-        onClose={closeEditModal}
-        onSubmit={handleEditTestRun}
-        testRun={selectedTestRun}
-        isSubmitting={isSubmitting}
-        availableTags={tags}
-        onCreateTag={createTag}
-        tagsLoading={tagsLoading}
-      />
+        <EditTestRunModal
+            isOpen={isEditModalOpen}
+            onClose={closeEditModal}
+            onSubmit={handleEditTestRun}
+            testRun={selectedTestRun}
+            isSubmitting={isSubmitting}
+            availableTags={tags}
+            onCreateTag={createTag}
+            tagsLoading={tagsLoading}
+        />
 
-      <CloneTestRunModal
-        isOpen={isCloneModalOpen}
-        onClose={() => {
-          setIsCloneModalOpen(false);
-          setTestRunToClone(null);
-        }}
-        onSubmit={handleCloneTestRun}
-        testRun={testRunToClone}
-        isSubmitting={isSubmitting}
-      />
+        <CloneTestRunModal
+            isOpen={isCloneModalOpen}
+            onClose={() => {
+              setIsCloneModalOpen(false);
+              setTestRunToClone(null);
+            }}
+            onSubmit={handleCloneTestRun}
+            testRun={testRunToClone}
+            isSubmitting={isSubmitting}
+        />
 
-      <CloseTestRunModal
-        isOpen={isCloseModalOpen}
-        onClose={() => {
-          setIsCloseModalOpen(false);
-          setTestRunToClose(null);
-        }}
-        onConfirm={handleCloseTestRun}
-        testRun={testRunToClose}
-        isSubmitting={isSubmitting}
-      />
+        <CloseTestRunModal
+            isOpen={isCloseModalOpen}
+            onClose={() => {
+              setIsCloseModalOpen(false);
+              setTestRunToClose(null);
+            }}
+            onConfirm={handleCloseTestRun}
+            testRun={testRunToClose}
+            isSubmitting={isSubmitting}
+        />
 
-      <ConfirmDialog
-        isOpen={isDeleteDialogOpen}
-        onClose={() => setIsDeleteDialogOpen(false)}
-        onConfirm={handleDeleteTestRun}
-        title="Delete Test Run"
-        message={`Are you sure you want to delete the test run "${selectedTestRun?.name}"? This action is irreversible and will delete all associated test executions.`}
-        confirmText="Delete"
-        variant="danger"
-      />
-    </div>
+        <ConfirmDialog
+            isOpen={isDeleteDialogOpen}
+            onClose={() => setIsDeleteDialogOpen(false)}
+            onConfirm={handleDeleteTestRun}
+            title="Delete Test Run"
+            message={`Are you sure you want to delete the test run "${selectedTestRun?.name}"? This action is irreversible and will delete all associated test executions.`}
+            confirmText="Delete"
+            variant="danger"
+        />
+      </div>
   );
 };
 

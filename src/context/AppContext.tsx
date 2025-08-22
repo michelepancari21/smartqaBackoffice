@@ -22,29 +22,29 @@ interface AppState {
 }
 
 type AppAction =
-  | { type: 'SET_PROJECTS'; payload: Project[] }
-  | { type: 'SET_LOADING_PROJECTS'; payload: boolean }
-  | { type: 'SET_TAGS'; payload: Tag[] }
-  | { type: 'SET_LOADING_TAGS'; payload: boolean }
-  | { type: 'SET_CONFIGURATIONS'; payload: Configuration[] }
-  | { type: 'SET_LOADING_CONFIGURATIONS'; payload: boolean }
-  | { type: 'ADD_PROJECT'; payload: Project }
-  | { type: 'UPDATE_PROJECT'; payload: Project }
-  | { type: 'DELETE_PROJECT'; payload: string }
-  | { type: 'SET_CURRENT_PROJECT'; payload: Project | null }
-  | { type: 'SET_SELECTED_PROJECT_ID'; payload: string | null }
-  | { type: 'ADD_TAG'; payload: Tag }
-  | { type: 'ADD_CONFIGURATION'; payload: Configuration }
-  | { type: 'ADD_TEST_CASE'; payload: TestCase }
-  | { type: 'UPDATE_TEST_CASE'; payload: TestCase }
-  | { type: 'DELETE_TEST_CASE'; payload: string }
-  | { type: 'ADD_TEST_EXECUTION'; payload: TestExecution }
-  | { type: 'UPDATE_TEST_EXECUTION'; payload: TestExecution }
-  | { type: 'ADD_TEST_PLAN'; payload: TestPlan }
-  | { type: 'UPDATE_TEST_PLAN'; payload: TestPlan }
-  | { type: 'ADD_SHARED_STEP'; payload: SharedStep }
-  | { type: 'UPDATE_SHARED_STEP'; payload: SharedStep }
-  | { type: 'CLEAR_DATA' };
+    | { type: 'SET_PROJECTS'; payload: Project[] }
+    | { type: 'SET_LOADING_PROJECTS'; payload: boolean }
+    | { type: 'SET_TAGS'; payload: Tag[] }
+    | { type: 'SET_LOADING_TAGS'; payload: boolean }
+    | { type: 'SET_CONFIGURATIONS'; payload: Configuration[] }
+    | { type: 'SET_LOADING_CONFIGURATIONS'; payload: boolean }
+    | { type: 'ADD_PROJECT'; payload: Project }
+    | { type: 'UPDATE_PROJECT'; payload: Project }
+    | { type: 'DELETE_PROJECT'; payload: string }
+    | { type: 'SET_CURRENT_PROJECT'; payload: Project | null }
+    | { type: 'SET_SELECTED_PROJECT_ID'; payload: string | null }
+    | { type: 'ADD_TAG'; payload: Tag }
+    | { type: 'ADD_CONFIGURATION'; payload: Configuration }
+    | { type: 'ADD_TEST_CASE'; payload: TestCase }
+    | { type: 'UPDATE_TEST_CASE'; payload: TestCase }
+    | { type: 'DELETE_TEST_CASE'; payload: string }
+    | { type: 'ADD_TEST_EXECUTION'; payload: TestExecution }
+    | { type: 'UPDATE_TEST_EXECUTION'; payload: TestExecution }
+    | { type: 'ADD_TEST_PLAN'; payload: TestPlan }
+    | { type: 'UPDATE_TEST_PLAN'; payload: TestPlan }
+    | { type: 'ADD_SHARED_STEP'; payload: SharedStep }
+    | { type: 'UPDATE_SHARED_STEP'; payload: SharedStep }
+    | { type: 'CLEAR_DATA' };
 
 const SELECTED_PROJECT_KEY = 'smartqa_selected_project_id';
 
@@ -98,7 +98,22 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case 'SET_LOADING_CONFIGURATIONS':
       return { ...state, isLoadingConfigurations: action.payload };
     case 'ADD_PROJECT':
-      return { ...state, projects: [...state.projects, action.payload] };
+      // When adding a project, also auto-select it if no project is currently selected
+      const shouldAutoSelect = state.projects.length === 0 || !state.selectedProjectId;
+      const newState = {
+        ...state,
+        projects: [...state.projects, action.payload]
+      };
+
+      if (shouldAutoSelect) {
+        setStoredSelectedProjectId(action.payload.id);
+        return {
+          ...newState,
+          selectedProjectId: action.payload.id
+        };
+      }
+
+      return newState;
     case 'ADD_TAG':
       return { ...state, tags: [...state.tags, action.payload] };
     case 'ADD_CONFIGURATION':
@@ -107,8 +122,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         projects: state.projects.some(p => p.id === action.payload.id)
-          ? state.projects.map(p => p.id === action.payload.id ? action.payload : p)
-          : [...state.projects, action.payload]
+            ? state.projects.map(p => p.id === action.payload.id ? action.payload : p)
+            : [...state.projects, action.payload]
       };
     case 'DELETE_PROJECT':
       const newSelectedProjectId = state.selectedProjectId === action.payload ? null : state.selectedProjectId;
@@ -195,6 +210,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const { state: authState } = useAuth();
   const loadingRef = useRef(false);
   const hasLoadedRef = useRef(false);
+  const isInitializing = useRef(false);
 
   // Load tags from API
   const loadTags = async () => {
@@ -204,14 +220,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     try {
       dispatch({ type: 'SET_LOADING_TAGS', payload: true });
-      
+
       const response = await tagsApiService.getTags();
-      const transformedTags = response.data.map(apiTag => 
-        tagsApiService.transformApiTag(apiTag)
+      const transformedTags = response.data.map(apiTag =>
+          tagsApiService.transformApiTag(apiTag)
       );
-      
+
       dispatch({ type: 'SET_TAGS', payload: transformedTags });
-      
+
     } catch (error) {
       console.error('Failed to load tags:', error);
     } finally {
@@ -227,14 +243,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     try {
       dispatch({ type: 'SET_LOADING_CONFIGURATIONS', payload: true });
-      
+
       const response = await configurationsApiService.getConfigurations();
-      const transformedConfigurations = response.data.map(apiConfig => 
-        configurationsApiService.transformApiConfiguration(apiConfig)
+      const transformedConfigurations = response.data.map(apiConfig =>
+          configurationsApiService.transformApiConfiguration(apiConfig)
       );
-      
+
       dispatch({ type: 'SET_CONFIGURATIONS', payload: transformedConfigurations });
-      
+
     } catch (error) {
       console.error('Failed to load configurations:', error);
     } finally {
@@ -266,8 +282,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
 
-    // Prevent multiple simultaneous requests using ref
-    if (loadingRef.current) {
+    // Prevent multiple simultaneous requests and check if already loaded
+    if (loadingRef.current || (hasLoadedRef.current && !force)) {
       console.log('Projects already loading, skipping duplicate request');
       return;
     }
@@ -276,25 +292,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       loadingRef.current = true;
       dispatch({ type: 'SET_LOADING_PROJECTS', payload: true });
-      
+
       // Load projects for sidebar using dedicated method (no filters)
       const allProjects = await projectsApiService.getProjectsForSidebar();
-      
+
       dispatch({ type: 'SET_PROJECTS', payload: allProjects });
       hasLoadedRef.current = true;
-      
-      // Only auto-select if no project is currently selected
+
+      // Only auto-select if no project is currently selected AND projects exist
       if (!state.selectedProjectId && allProjects.length > 0) {
         const storedProjectId = getStoredSelectedProjectId();
         if (storedProjectId && allProjects.some(p => p.id === storedProjectId)) {
           dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: storedProjectId });
         } else {
+          // Auto-select the first project (most recently created since we order by createdAt desc)
           dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: allProjects[0].id });
         }
+      } else if (allProjects.length === 0) {
+        // No projects exist, clear any selected project
+        dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: null });
       }
-      
+
     } catch (error) {
       console.error('Failed to load projects:', error);
+      // On error, mark as loaded to prevent infinite retries
+      hasLoadedRef.current = true;
+      dispatch({ type: 'SET_PROJECTS', payload: [] });
+      dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: null });
     } finally {
       loadingRef.current = false;
       dispatch({ type: 'SET_LOADING_PROJECTS', payload: false });
@@ -324,37 +348,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Effect to handle authentication state changes
   useEffect(() => {
+    // Prevent multiple initializations
+    if (isInitializing.current) {
+      return;
+    }
+
     if (authState.isAuthenticated) {
       // User is authenticated, load projects only if not already loaded
       if (!hasLoadedRef.current && !loadingRef.current) {
+        isInitializing.current = true;
         loadProjects();
         loadTags();
         loadConfigurations();
+        // Reset initialization flag after a delay
+        setTimeout(() => {
+          isInitializing.current = false;
+        }, 1000);
       }
     } else {
       // User is not authenticated, clear data
       hasLoadedRef.current = false;
       loadingRef.current = false;
+      isInitializing.current = false;
       dispatch({ type: 'CLEAR_DATA' });
     }
   }, [authState.isAuthenticated]); // Only depend on authentication state
 
   return (
-    <AppContext.Provider value={{ 
-      state, 
-      dispatch, 
-      getFilteredTestCases,
-      getFilteredTestExecutions,
-      getFilteredTestPlans,
-      getSelectedProject,
-      loadProjects,
-      loadTags,
-      loadConfigurations,
-      createTag,
-      createConfiguration
-    }}>
-      {children}
-    </AppContext.Provider>
+      <AppContext.Provider value={{
+        state,
+        dispatch,
+        getFilteredTestCases,
+        getFilteredTestExecutions,
+        getFilteredTestPlans,
+        getSelectedProject,
+        loadProjects,
+        loadTags,
+        loadConfigurations,
+        createTag,
+        createConfiguration
+      }}>
+        {children}
+      </AppContext.Provider>
   );
 };
 
