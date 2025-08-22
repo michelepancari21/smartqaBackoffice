@@ -8,7 +8,7 @@ import StatusBadge from '../components/UI/StatusBadge';
 import TestCaseDetailsSidebar from '../components/TestCase/TestCaseDetailsSidebar';
 import { testRunsApiService, TestRun } from '../services/testRunsApi';
 import { testCasesApiService } from '../services/testCasesApi';
-import { apiService } from '../services/api';
+import { testCaseExecutionsApiService } from '../services/testCaseExecutionsApi';
 import { useApp } from '../context/AppContext';
 import { TestCase, TEST_RESULTS, TestResultId } from '../types';
 import toast from 'react-hot-toast';
@@ -204,15 +204,16 @@ const TestRunsOverview: React.FC = () => {
         console.log('🔄 Processing test run:', testRun.name);
 
         // Get detailed test run data with caseResults (we need this for execution results)
+        // Get detailed test run data with executions (we need this for execution results)
         const detailedTestRunResponse = await testRunsApiService.getTestRun(testRun.id);
         
-        // Extract execution results from caseResults
-        if (detailedTestRunResponse.data.attributes.caseResults && Array.isArray(detailedTestRunResponse.data.attributes.caseResults)) {
-          detailedTestRunResponse.data.attributes.caseResults.forEach((caseResult: any) => {
-            const testCaseId = caseResult.test_case_id ? caseResult.test_case_id.split('/').pop() : null;
-            const rawResult = caseResult.result;
+        // Extract execution results from executions
+        if (detailedTestRunResponse.data.attributes.executions && Array.isArray(detailedTestRunResponse.data.attributes.executions)) {
+          detailedTestRunResponse.data.attributes.executions.forEach((execution: any) => {
+            const testCaseId = execution.test_case_id ? execution.test_case_id.toString() : null;
+            const rawResult = execution.result;
             
-            console.log('🔄 Processing caseResult:', { testCaseId, rawResult, type: typeof rawResult });
+            console.log('🔄 Processing execution:', { testCaseId, rawResult, type: typeof rawResult });
             
             // Convert numeric result to TestResultId
             let resultId: TestResultId;
@@ -398,8 +399,15 @@ const TestRunsOverview: React.FC = () => {
   };
 
   const handleExecutionResultChange = async (testCaseId: string, testRunId: string, newResultId: TestResultId) => {
-    const updateKey = `${testCaseId}-${testRunId}`;
+    // Find the test run to check if it's closed
+    const testRun = testRuns.find(tr => tr.id === testRunId);
+    if (testRun?.state === 6) {
+      toast.error('Cannot update execution results for closed test runs');
+      return;
+    }
+
     const newResultLabel = TEST_RESULTS[newResultId];
+    const updateKey = `${testCaseId}-${testRunId}`;
     
     try {
       // Add to updating set to show loading state
@@ -407,102 +415,12 @@ const TestRunsOverview: React.FC = () => {
 
       console.log(`🔄 Updating execution result for test case ${testCaseId} in test run ${testRunId} to: ${newResultId} (${newResultLabel})`);
 
-      // STEP 1: Get the current test case data to preserve ALL existing relationships
-      const testCaseResponse = await testCasesApiService.getTestCase(testCaseId);
-      const currentTestCase = testCaseResponse.data;
 
-      console.log('📋 Current test case data:', currentTestCase);
-      console.log('📋 Current test case relationships:', currentTestCase.relationships);
-
-      // STEP 2: Build the complete PATCH payload preserving ALL relationships
-      const patchPayload = {
-        data: {
-          type: "TestCase",
-          attributes: {
-            // Preserve all existing attributes
-            title: currentTestCase.attributes.title,
-            description: currentTestCase.attributes.description,
-            priority: currentTestCase.attributes.priority,
-            type: currentTestCase.attributes.type,
-            state: currentTestCase.attributes.state,
-            automation: currentTestCase.attributes.automation,
-            template: currentTestCase.attributes.template || 1,
-            preconditions: currentTestCase.attributes.preconditions || ''
-          },
-          relationships: {
-            // Preserve project relationship
-            project: currentTestCase.relationships.project,
-            
-            // Preserve folder relationship if it exists
-            ...(currentTestCase.relationships.folder && {
-              folder: currentTestCase.relationships.folder
-            }),
-            
-            // Preserve tags relationship if it exists
-            ...(currentTestCase.relationships.tags && {
-              tags: currentTestCase.relationships.tags
-            }),
-            
-            // Preserve step results relationship if it exists
-            ...(currentTestCase.relationships.stepResults && {
-              step_results: currentTestCase.relationships.stepResults
-            }),
-            
-            // Preserve shared steps relationship if it exists
-            ...(currentTestCase.relationships.sharedSteps && {
-              shared_steps: currentTestCase.relationships.sharedSteps
-            }),
-            
-            // Preserve attachments relationship if it exists
-            ...(currentTestCase.relationships.attachments && {
-              attachments: currentTestCase.relationships.attachments
-            }),
-            
-            // Preserve creator and editor relationships
-            creator: currentTestCase.relationships.creator,
-            editor: currentTestCase.relationships.editor,
-            
-            // STEP 3: Handle test_runs relationship - preserve existing + update current
-            test_runs: {
-              data: (() => {
-                // Get existing test run relationships
-                const existingTestRuns = currentTestCase.relationships?.testRuns?.data || [];
-                
-                console.log('📋 Existing test runs relationships:', existingTestRuns);
-                
-                // Filter out the current test run if it exists
-                const otherTestRuns = existingTestRuns.filter((tr: any) => {
-                  const trId = tr.id.split('/').pop();
-                  return trId !== testRunId;
-                });
-                
-                console.log('📋 Other test runs (excluding current):', otherTestRuns);
-                
-                // Add the current test run with the new result
-                const updatedTestRuns = [
-                  ...otherTestRuns,
-                  {
-                    type: "TestRun",
-                    id: `/api/test_runs/${testRunId}`,
-                    meta: {
-                      result: newResultId // Send the numeric ID to API
-                    }
-                  }
-                ];
-                
-                console.log('📋 Final test runs relationships:', updatedTestRuns);
-                return updatedTestRuns;
-              })()
-            }
-          }
-        }
-      };
-
-      console.log('📤 Sending PATCH request with complete payload:', JSON.stringify(patchPayload, null, 2));
-      
-      await apiService.authenticatedRequest(`/test_cases/${testCaseId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(patchPayload),
+      // Use new POST endpoint for test case executions
+      const response = await testCaseExecutionsApiService.createTestCaseExecution({
+        testCaseId,
+        testRunId,
+        result: newResultId
       });
 
       // Update local state to reflect the change immediately
@@ -814,7 +732,7 @@ const TestRunsOverview: React.FC = () => {
                     <TestResultDropdown
                       value={testCase.executionStatus}
                       onChange={(newResultId) => handleExecutionResultChange(testCase.id, testCase.testRunId, newResultId)}
-                      disabled={updatingResults.has(`${testCase.id}-${testCase.testRunId}`)}
+                      disabled={testRuns.find(tr => tr.id === testCase.testRunId)?.state === 6 || updatingResults.has(`${testCase.id}-${testCase.testRunId}`)}
                       isUpdating={updatingResults.has(`${testCase.id}-${testCase.testRunId}`)}
                     />
                   </td>
@@ -849,6 +767,9 @@ const TestRunsOverview: React.FC = () => {
         context="test-runs-overview"
         testRunId={selectedTestCaseForDetails ? 
           allTestCasesWithExecution.find(tc => tc.id === selectedTestCaseForDetails.id)?.testRunId : undefined
+        }
+        isTestRunClosed={selectedTestCaseForDetails ? 
+          testRuns.find(tr => tr.id === allTestCasesWithExecution.find(tc => tc.id === selectedTestCaseForDetails.id)?.testRunId)?.state === 6 : false
         }
         currentExecutionResult={selectedTestCaseForDetails ? 
           allTestCasesWithExecution.find(tc => tc.id === selectedTestCaseForDetails.id)?.executionStatus : undefined

@@ -224,12 +224,28 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
           console.log(`🏃 Test cases in this run: ${testCasesInThisRun}`);
           console.log(`🏃 Running total test cases in active runs: ${totalTestCasesInActiveRuns}`);
           
-          // Check if this test run has caseResults data (it's an array of individual results)
-          if (apiTestRun.attributes.caseResults && Array.isArray(apiTestRun.attributes.caseResults)) {
-            console.log(`🏃 ✅ VALID caseResults array found for "${apiTestRun.attributes.name}"`);
-            console.log(`🏃 caseResults array length:`, apiTestRun.attributes.caseResults.length);
+          // Check if this test run has executions data (it's an array of individual results)
+          if (apiTestRun.attributes.executions && Array.isArray(apiTestRun.attributes.executions)) {
+            console.log(`🏃 ✅ VALID executions array found for "${apiTestRun.attributes.name}"`);
+            console.log(`🏃 executions array length:`, apiTestRun.attributes.executions.length);
             
-            // Count each result type from the array of individual test case results
+            // Group executions by test case ID and get the last execution per test case
+            const lastExecutionPerTestCase = new Map<string, any>();
+            
+            apiTestRun.attributes.executions.forEach((execution: any) => {
+              const testCaseId = execution.test_case_id.toString();
+              const executionDate = new Date(execution.created_at);
+              
+              // Keep only the latest execution for each test case
+              const existing = lastExecutionPerTestCase.get(testCaseId);
+              if (!existing || new Date(existing.created_at) < executionDate) {
+                lastExecutionPerTestCase.set(testCaseId, execution);
+              }
+            });
+            
+            console.log(`🏃 Found ${lastExecutionPerTestCase.size} unique test cases with executions`);
+            
+            // Count each result type from the last execution per test case
             let runPassed = 0;
             let runFailed = 0;
             let runBlocked = 0;
@@ -239,13 +255,13 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
             let runInProgress = 0;
             let runUnknown = 0;
             
-            apiTestRun.attributes.caseResults.forEach((testCaseResult: any, index: number) => {
-              console.log(`🏃   Test case ${index + 1}:`, testCaseResult);
-              console.log(`🏃     - test_case_id: ${testCaseResult.test_case_id}`);
-              console.log(`🏃     - result: ${testCaseResult.result}`);
+            Array.from(lastExecutionPerTestCase.values()).forEach((execution: any, index: number) => {
+              console.log(`🏃   Test case ${index + 1}:`, execution);
+              console.log(`🏃     - test_case_id: ${execution.test_case_id}`);
+              console.log(`🏃     - result: ${execution.result}`);
               
               // Handle both numeric and string result values
-              const rawResult = testCaseResult.result;
+              const rawResult = execution.result;
               let resultLabel: string;
               
               if (typeof rawResult === 'number') {
@@ -311,7 +327,7 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
             actualUnknown += runUnknown;
             
             // For test cases without execution results, count them as "untested"
-            const testCasesWithResults = apiTestRun.attributes.caseResults.length;
+            const testCasesWithResults = lastExecutionPerTestCase.size;
             const testCasesWithoutResults = testCasesInThisRun - testCasesWithResults;
             if (testCasesWithoutResults > 0) {
               actualUntested += testCasesWithoutResults;
@@ -330,14 +346,14 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
               actualUnknown
             });
           } else {
-            console.log(`🏃 ❌ Test run "${apiTestRun.attributes.name}" has NO VALID caseResults array`);
-            console.log(`🏃    - caseResults value:`, apiTestRun.attributes.caseResults);
-            console.log(`🏃    - caseResults type:`, typeof apiTestRun.attributes.caseResults);
-            console.log(`🏃    - Is array:`, Array.isArray(apiTestRun.attributes.caseResults));
+            console.log(`🏃 ❌ Test run "${apiTestRun.attributes.name}" has NO VALID executions array`);
+            console.log(`🏃    - executions value:`, apiTestRun.attributes.executions);
+            console.log(`🏃    - executions type:`, typeof apiTestRun.attributes.executions);
+            console.log(`🏃    - Is array:`, Array.isArray(apiTestRun.attributes.executions));
             
-            // If no caseResults, count all test cases in this run as "untested"
+            // If no executions, count all test cases in this run as "untested"
             actualUntested += testCasesInThisRun;
-            console.log(`🏃 No caseResults - counted ${testCasesInThisRun} test cases as "untested"`);
+            console.log(`🏃 No executions - counted ${testCasesInThisRun} test cases as "untested"`);
           }
         });
         
@@ -655,6 +671,7 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
 };
 
 // Generate bar chart data from closed test runs with real caseResults
+// Generate bar chart data from closed test runs with real executions
 function generateClosedTestRunsBarData(closedTestRuns: any[]): Array<{
   month: string;
   passed: number;
@@ -683,9 +700,9 @@ function generateClosedTestRunsBarData(closedTestRuns: any[]): Array<{
       name: apiTestRun.attributes.name,
       state: apiTestRun.attributes.state,
       closedAt: apiTestRun.attributes.closedAt,
-      caseResults: apiTestRun.attributes.caseResults,
-      caseResultsIsArray: Array.isArray(apiTestRun.attributes.caseResults),
-      caseResultsLength: Array.isArray(apiTestRun.attributes.caseResults) ? apiTestRun.attributes.caseResults.length : 'N/A'
+      executions: apiTestRun.attributes.executions,
+      executionsIsArray: Array.isArray(apiTestRun.attributes.executions),
+      executionsLength: Array.isArray(apiTestRun.attributes.executions) ? apiTestRun.attributes.executions.length : 'N/A'
     });
     
     const closedAt = apiTestRun.attributes.closedAt;
@@ -716,14 +733,14 @@ function generateClosedTestRunsBarData(closedTestRuns: any[]): Array<{
       console.log(`🔍 BAR_CHART_DEBUG: Initialized month data for: ${monthKey}`);
     }
     
-    // Process caseResults to count each result type
-    if (apiTestRun.attributes.caseResults && Array.isArray(apiTestRun.attributes.caseResults)) {
-      console.log(`🔍 BAR_CHART_DEBUG: ✅ VALID caseResults array found with ${apiTestRun.attributes.caseResults.length} results`);
+    // Process executions to count each result type
+    if (apiTestRun.attributes.executions && Array.isArray(apiTestRun.attributes.executions)) {
+      console.log(`🔍 BAR_CHART_DEBUG: ✅ VALID executions array found with ${apiTestRun.attributes.executions.length} results`);
       
-      apiTestRun.attributes.caseResults.forEach((caseResult: any, caseIndex: number) => {
-        console.log(`🔍 BAR_CHART_DEBUG:   Case result ${caseIndex + 1}:`, caseResult);
+      apiTestRun.attributes.executions.forEach((execution: any, executionIndex: number) => {
+        console.log(`🔍 BAR_CHART_DEBUG:   Execution ${executionIndex + 1}:`, execution);
         
-        const rawResult = caseResult.result;
+        const rawResult = execution.result;
         console.log(`🔍 BAR_CHART_DEBUG:   Raw result value: ${rawResult} (type: ${typeof rawResult})`);
         
         let resultLabel: string;
@@ -779,11 +796,12 @@ function generateClosedTestRunsBarData(closedTestRuns: any[]): Array<{
       });
       
       console.log(`🔍 BAR_CHART_DEBUG: Month data AFTER processing all caseResults for ${monthKey}:`, monthlyData[monthKey]);
+      console.log(`🔍 BAR_CHART_DEBUG: Month data AFTER processing all executions for ${monthKey}:`, monthlyData[monthKey]);
     } else {
-      console.log(`🔍 BAR_CHART_DEBUG: ❌ NO VALID caseResults for test run: ${apiTestRun.attributes.name}`);
-      console.log('🔍 BAR_CHART_DEBUG:   caseResults value:', apiTestRun.attributes.caseResults);
-      console.log('🔍 BAR_CHART_DEBUG:   caseResults type:', typeof apiTestRun.attributes.caseResults);
-      console.log('🔍 BAR_CHART_DEBUG:   Is array:', Array.isArray(apiTestRun.attributes.caseResults));
+      console.log(`🔍 BAR_CHART_DEBUG: ❌ NO VALID executions for test run: ${apiTestRun.attributes.name}`);
+      console.log('🔍 BAR_CHART_DEBUG:   executions value:', apiTestRun.attributes.executions);
+      console.log('🔍 BAR_CHART_DEBUG:   executions type:', typeof apiTestRun.attributes.executions);
+      console.log('🔍 BAR_CHART_DEBUG:   Is array:', Array.isArray(apiTestRun.attributes.executions));
     }
   });
   
@@ -985,7 +1003,6 @@ function hashString(str: string): number {
 function generateTrendData(testCases: TestCase[], totalTestCases: number) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const currentDate = new Date();
-  const monthlyData: { [key: string]: number } = {};
   
   // Initialize last 12 months with zero values
   const trendData = [];
@@ -997,33 +1014,59 @@ function generateTrendData(testCases: TestCase[], totalTestCases: number) {
   const uniqueTypes = [...new Set(testCases.map(tc => tc.type))];
   console.log('📈 Unique test case types found:', uniqueTypes);
   
+  // Map test case types to TEST_CASE_TYPES labels
+  const getTypeLabel = (type: string): string => {
+    const typeMap = {
+      'other': 'Other',
+      'acceptance': 'Acceptance',
+      'accessibility': 'Accessibility',
+      'compatibility': 'Compatibility',
+      'destructive': 'Destructive',
+      'functional': 'Functional',
+      'performance': 'Performance',
+      'regression': 'Regression',
+      'security': 'Security',
+      'smoke': 'Smoke & Sanity',
+      'usability': 'Usability'
+    };
+    return typeMap[type as keyof typeof typeMap] || type;
+  };
+  
   // Initialize last 12 months
   for (let i = 11; i >= 0; i--) {
     const date = new Date(currentDate);
     date.setMonth(date.getMonth() - i);
     const monthKey = months[date.getMonth()];
     
-    // Count test cases created up to this month by type
-    const cutoffDate = new Date(date);
-    cutoffDate.setMonth(cutoffDate.getMonth() + 1); // End of this month
+    // Count test cases created IN this specific month by type
+    const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+    const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
     
-    const testCasesUpToThisMonth = testCases.filter(tc => tc.createdAt <= cutoffDate);
+    const testCasesInThisMonth = testCases.filter(tc => 
+      tc.createdAt >= monthStart && tc.createdAt <= monthEnd
+    );
     
     // Build trend data object dynamically based on actual types
     const monthData: any = {
       month: monthKey,
       date: date.toISOString().split('T')[0]
     };
-    monthlyData[monthKey] = 0;
+    
+    // Count test cases by type for this month
+    uniqueTypes.forEach(type => {
+      const typeLabel = getTypeLabel(type);
+      const countForType = testCasesInThisMonth.filter(tc => tc.type === type).length;
+      monthData[typeLabel] = countForType;
+    });
     
     // Always include total
-    monthData.Total = testCasesUpToThisMonth.length;
+    monthData.Total = testCasesInThisMonth.length;
     
-    console.log(`📈 Month ${monthKey}:`, monthData);
+    console.log(`📈 Month ${monthKey} (${monthStart.toDateString()} to ${monthEnd.toDateString()}):`, monthData);
     
     trendData.push(monthData);
   }
   
-  console.log('📈 Generated real trend data based on test case creation dates:', trendData);
+  console.log('📈 Generated monthly trend data (test cases created per month):', trendData);
   return trendData;
 }

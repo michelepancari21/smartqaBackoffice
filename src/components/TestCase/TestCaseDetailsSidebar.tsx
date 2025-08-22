@@ -3,7 +3,8 @@ import { X, Loader, Calendar, User, Tag as TagIcon, Clock, CheckCircle, Edit, Ey
 import { format } from 'date-fns';
 import { testCasesApiService } from '../../services/testCasesApi';
 import { sharedStepsApiService } from '../../services/sharedStepsApi';
-import { apiService } from '../../services/api';
+import { testCaseExecutionsApiService, TestCaseExecution } from '../../services/testCaseExecutionsApi';
+import { testRunsApiService } from '../../services/testRunsApi';
 import { TestCase } from '../../types';
 import { TEST_RESULTS, TestResultId } from '../../types';
 import toast from 'react-hot-toast';
@@ -14,6 +15,7 @@ interface TestCaseDetailsSidebarProps {
   testCase: TestCase | null;
   context?: 'test-cases' | 'test-run-details' | 'test-runs-overview';
   testRunId?: string;
+  isTestRunClosed?: boolean;
   currentExecutionResult?: TestResultId;
   onExecutionResultChange?: (testCaseId: string, testRunId: string, newResultId: TestResultId) => void;
 }
@@ -50,6 +52,7 @@ interface TestCaseDetails {
     url: string;
     fileName: string;
   }>;
+  executions: TestCaseExecution[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -258,6 +261,7 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
   testCase,
   context = 'test-cases',
   testRunId,
+  isTestRunClosed = false,
   currentExecutionResult,
   onExecutionResultChange
 }) => {
@@ -394,6 +398,39 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
       }
       
       // Process attachments from relationships
+      // Process executions if this is from a test run context
+      let executions: TestCaseExecution[] = [];
+      if (testRunId) {
+        try {
+          console.log('🔄 Fetching executions for test case in test run context...');
+          const testRunResponse = await testRunsApiService.getTestRun(testRunId);
+          
+          if (testRunResponse.data.attributes.executions && Array.isArray(testRunResponse.data.attributes.executions)) {
+            // Filter executions for this specific test case
+            const testCaseExecutions = testRunResponse.data.attributes.executions.filter(
+              (execution: any) => execution.test_case_id.toString() === testCase.id
+            );
+            
+            executions = testCaseExecutions.map((execution: any) => ({
+              id: execution.id.toString(),
+              testCaseId: execution.test_case_id.toString(),
+              testRunId: execution.test_run_id.toString(),
+              result: execution.result,
+              resultLabel: TEST_RESULTS[execution.result as TestResultId] || 'Unknown',
+              createdAt: new Date(execution.created_at),
+              updatedAt: new Date(execution.updated_at)
+            }));
+            
+            // Sort by creation date (newest first)
+            executions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            
+            console.log('✅ Loaded', executions.length, 'executions for test case');
+          }
+        } catch (error) {
+          console.error('❌ Failed to load executions:', error);
+        }
+      }
+      
       if (response.data.relationships.attachments?.data) {
         console.log('📎 Processing attachments from relationships...');
         
@@ -453,6 +490,7 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
         stepResults,
         sharedSteps,
         attachments,
+        executions,
         createdAt: new Date(response.data.attributes.createdAt),
         updatedAt: new Date(response.data.attributes.updatedAt)
       };
@@ -495,7 +533,12 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
   };
 
   const handleExecutionResultChange = async (newResultId: TestResultId) => {
-    if (!testCase || !testRunId) return;
+    if (!testCase || !testRunId || isTestRunClosed) {
+      if (isTestRunClosed) {
+        toast.error('Cannot update execution results for closed test runs');
+      }
+      return;
+    }
 
     const newResultLabel = TEST_RESULTS[newResultId];
     
@@ -504,71 +547,31 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
 
       console.log(`🔄 Updating execution result for test case ${testCase.id} in test run ${testRunId} to: ${newResultId} (${newResultLabel})`);
 
-      // Get the current test case data to preserve ALL existing relationships
-      const testCaseResponse = await testCasesApiService.getTestCase(testCase.id);
-      const currentTestCase = testCaseResponse.data;
 
-      // Build the complete PATCH payload preserving ALL relationships
-      const patchPayload = {
-        data: {
-          type: "TestCase",
-          attributes: {
-            title: currentTestCase.attributes.title,
-            description: currentTestCase.attributes.description,
-            priority: currentTestCase.attributes.priority,
-            type: currentTestCase.attributes.type,
-            state: currentTestCase.attributes.state,
-            automation: currentTestCase.attributes.automation,
-            template: currentTestCase.attributes.template || 1,
-            preconditions: currentTestCase.attributes.preconditions || ''
-          },
-          relationships: {
-            project: currentTestCase.relationships.project,
-            ...(currentTestCase.relationships.folder && {
-              folder: currentTestCase.relationships.folder
-            }),
-            ...(currentTestCase.relationships.tags && {
-              tags: currentTestCase.relationships.tags
-            }),
-            ...(currentTestCase.relationships.stepResults && {
-              step_results: currentTestCase.relationships.stepResults
-            }),
-            ...(currentTestCase.relationships.sharedSteps && {
-              shared_steps: currentTestCase.relationships.sharedSteps
-            }),
-            ...(currentTestCase.relationships.attachments && {
-              attachments: currentTestCase.relationships.attachments
-            }),
-            creator: currentTestCase.relationships.creator,
-            editor: currentTestCase.relationships.editor,
-            test_runs: {
-              data: (() => {
-                const existingTestRuns = currentTestCase.relationships?.testRuns?.data || [];
-                const otherTestRuns = existingTestRuns.filter((tr: any) => {
-                  const trId = tr.id.split('/').pop();
-                  return trId !== testRunId;
-                });
-                
-                return [
-                  ...otherTestRuns,
-                  {
-                    type: "TestRun",
-                    id: `/api/test_runs/${testRunId}`,
-                    meta: {
-                      result: newResultId
-                    }
-                  }
-                ];
-              })()
-            }
-          }
-        }
-      };
-
-      await apiService.authenticatedRequest(`/test_cases/${testCase.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(patchPayload),
+      // Use new POST endpoint for test case executions
+      const response = await testCaseExecutionsApiService.createTestCaseExecution({
+        testCaseId: testCase.id,
+        testRunId,
+        result: newResultId
       });
+      
+      // Add the new execution to the local state
+      if (testCaseDetails) {
+        const newExecution: TestCaseExecution = {
+          id: response.data.attributes.id.toString(),
+          testCaseId: testCase.id,
+          testRunId: testRunId,
+          result: newResultId,
+          resultLabel: newResultLabel,
+          createdAt: response.data.attributes.created_at ? new Date(response.data.attributes.created_at) : new Date(),
+          updatedAt: response.data.attributes.updated_at ? new Date(response.data.attributes.updated_at) : new Date()
+        };
+        
+        setTestCaseDetails(prev => prev ? {
+          ...prev,
+          executions: [newExecution, ...prev.executions]
+        } : null);
+      }
 
       // Notify parent component of the change
       if (onExecutionResultChange) {
@@ -831,9 +834,24 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                     )}
                   </div>
 
-                  {/* Test Execution Result - Only show for test run contexts */}
-                  {context !== 'test-cases' && testRunId && currentExecutionResult && (
+                  {/* Show message for closed test runs */}
+                  {context !== 'test-cases' && testRunId && isTestRunClosed && (
                     <div className="pt-4 border-t border-slate-700">
+                      <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+                        <div className="flex items-center">
+                          <Clock className="w-4 h-4 text-orange-400 mr-2" />
+                          <span className="text-sm text-orange-400 font-medium">Test Run Closed</span>
+                        </div>
+                        <p className="text-xs text-orange-300 mt-1">
+                          This test run is closed. Execution results cannot be modified.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Test Execution Result - Only show for test run contexts */}
+                  {context !== 'test-cases' && testRunId && currentExecutionResult && !isTestRunClosed && (
+                    <div className="pt-4 border-t border-slate-700 space-y-4">
                       <h4 className="text-sm font-medium text-gray-300 mb-3">Test Execution Result</h4>
                       <TestResultDropdown
                         value={currentExecutionResult}
@@ -844,6 +862,42 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                       <p className="text-xs text-gray-400 mt-2">
                         Update the execution result for this test case in the current test run
                       </p>
+                      
+                      {/* Execution History */}
+                      {testCaseDetails.executions && testCaseDetails.executions.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-300 mb-3">Execution History</h4>
+                          <div className="space-y-2 max-h-48 overflow-y-auto">
+                            {testCaseDetails.executions.map((execution, index) => (
+                              <div key={execution.id} className="bg-slate-700/50 border border-slate-600 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center">
+                                    <div className={`w-2 h-2 rounded-full mr-2 ${
+                                      execution.result === 1 ? 'bg-green-400' :
+                                      execution.result === 2 ? 'bg-red-400' :
+                                      execution.result === 3 ? 'bg-yellow-400' :
+                                      execution.result === 4 ? 'bg-orange-400' :
+                                      execution.result === 5 ? 'bg-purple-400' :
+                                      execution.result === 6 ? 'bg-gray-400' :
+                                      execution.result === 7 ? 'bg-blue-400' :
+                                      'bg-gray-500'
+                                    }`}></div>
+                                    <span className="text-sm font-medium text-white">{execution.resultLabel}</span>
+                                    {index === 0 && (
+                                      <span className="ml-2 text-xs text-cyan-400 bg-cyan-500/20 px-2 py-0.5 rounded-full">
+                                        Latest
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  {format(execution.createdAt, 'MMM dd, yyyy HH:mm')}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

@@ -177,6 +177,34 @@ export interface UpdateTestCaseResponse {
 }
 
 class TestCasesApiService {
+  // Helper functions for date parsing
+  private parseDate(dateString: string): Date {
+    if (!dateString) {
+      console.warn('Empty date string provided, using current date');
+      return new Date();
+    }
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date string provided:', dateString, 'using current date');
+      return new Date();
+    }
+    
+    return date;
+  }
+
+  private parseOptionalDate(dateString?: string): Date | undefined {
+    if (!dateString) return undefined;
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid optional date string provided:', dateString);
+      return undefined;
+    }
+    
+    return date;
+  }
+
   // Mappings pour convertir entre notre format et l'API
   private priorityToApi = {
     'low': 1,
@@ -813,8 +841,8 @@ class TestCasesApiService {
       stepResults: stepResults, // Add step result IDs
       sharedSteps: sharedStepIds, // Add shared step IDs from relationships
       tags: tags,
-      createdAt: new Date(apiTestCase.attributes.createdAt),
-      updatedAt: new Date(apiTestCase.attributes.updatedAt),
+      createdAt: this.parseDate(apiTestCase.attributes.createdAt),
+      updatedAt: this.parseDate(apiTestCase.attributes.updatedAt),
       estimatedDuration: apiTestCase.attributes.estimatedDuration || 5
     };
     

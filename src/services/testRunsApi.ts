@@ -24,6 +24,14 @@ export interface ApiTestRun {
       test_case_id: string;
       result: number | string;
     }>;
+    executions?: Array<{
+      id: number;
+      test_case_id: number;
+      test_run_id: number;
+      result: number;
+      created_at: string;
+      updated_at: string;
+    }>;
   };
   relationships: {
     project: {
@@ -438,6 +446,7 @@ class TestRunsApiService {
     }
     
     // Process caseResults array to get real execution statistics
+    // Process executions array to get real execution statistics
     let passedCount = 0;
     let failedCount = 0;
     let blockedCount = 0;
@@ -448,29 +457,48 @@ class TestRunsApiService {
     let unknownCount = 0;
     let totalTestCases = 0;
     
-    if (apiTestRun.attributes.caseResults && Array.isArray(apiTestRun.attributes.caseResults)) {
-      console.log(`🏃 Processing caseResults array for "${apiTestRun.attributes.name}"`);
-      console.log(`🏃 caseResults:`, apiTestRun.attributes.caseResults);
+    if (apiTestRun.attributes.executions && Array.isArray(apiTestRun.attributes.executions)) {
+      console.log(`🏃 Processing executions array for "${apiTestRun.attributes.name}"`);
+      console.log(`🏃 executions:`, apiTestRun.attributes.executions);
       
-      apiTestRun.attributes.caseResults.forEach((testCaseResult) => {
-        console.log(`🏃   - Processing test case result:`, testCaseResult);
+      // Group executions by test case ID and get the last execution per test case
+      const lastExecutionPerTestCase = new Map<string, any>();
+      
+      apiTestRun.attributes.executions.forEach((execution: any) => {
+        const testCaseId = execution.test_case_id.toString();
+        const executionDate = new Date(execution.created_at);
+        
+        // Keep only the latest execution for each test case
+        const existing = lastExecutionPerTestCase.get(testCaseId);
+        if (!existing || new Date(existing.created_at) < executionDate) {
+          lastExecutionPerTestCase.set(testCaseId, execution);
+        }
+      });
+      
+      console.log(`🏃 Found ${lastExecutionPerTestCase.size} unique test cases with executions`);
+      
+      // Count each result type from the last execution per test case
+      Array.from(lastExecutionPerTestCase.values()).forEach((execution: any, index: number) => {
+        console.log(`🏃   Test case ${index + 1}:`, execution);
+        console.log(`🏃     - test_case_id: ${execution.test_case_id}`);
+        console.log(`🏃     - result: ${execution.result}`);
         
         // Handle both numeric and string result values
-        const rawResult = testCaseResult.result;
-        let result: string;
+        const rawResult = execution.result;
+        let resultLabel: string;
         
         if (typeof rawResult === 'number') {
           // Convert numeric ID to string label
-          result = TEST_RESULTS[rawResult as TestResultId]?.toLowerCase() || 'unknown';
+          resultLabel = TEST_RESULTS[rawResult as TestResultId]?.toLowerCase() || 'unknown';
         } else if (typeof rawResult === 'string') {
-          result = rawResult.toLowerCase();
+          resultLabel = rawResult.toLowerCase();
         } else {
-          result = 'unknown';
+          resultLabel = 'unknown';
         }
         
-        console.log(`🏃   - Raw result: ${rawResult} (${typeof rawResult}), processed result: ${result}`);
+        console.log(`🏃     - processed result: ${resultLabel}`);
         
-        switch (result) {
+        switch (resultLabel) {
           case 'passed':
             passedCount++;
             break;
@@ -496,11 +524,12 @@ class TestRunsApiService {
             unknownCount++;
             break;
           default:
-            console.log(`🏃     - Unknown result type: ${result}`);
+            console.log(`🏃     - Unknown result type: ${resultLabel}`);
+            unknownCount++;
         }
       });
       
-      totalTestCases = apiTestRun.attributes.caseResults.length;
+      totalTestCases = lastExecutionPerTestCase.size;
       
       console.log(`🏃 Final counts for "${apiTestRun.attributes.name}":`, {
         total: totalTestCases,
@@ -514,8 +543,8 @@ class TestRunsApiService {
         unknown: unknownCount
       });
     } else {
-      console.log(`🏃 No valid caseResults array found for "${apiTestRun.attributes.name}"`);
-      // Fallback to test case IDs count if no caseResults
+      console.log(`🏃 No valid executions array found for "${apiTestRun.attributes.name}"`);
+      // Fallback to test case IDs count if no executions
       totalTestCases = testCaseIds.length;
     }
     

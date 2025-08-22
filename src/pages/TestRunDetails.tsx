@@ -10,7 +10,7 @@ import TestRunDetailsFilters from '../components/TestRun/TestRunDetailsFilters';
 import TestRunDetailsFiltersSidebar from '../components/TestRun/TestRunDetailsFiltersSidebar';
 import { testRunsApiService, TestRun } from '../services/testRunsApi';
 import { testCasesApiService } from '../services/testCasesApi';
-import { apiService } from '../services/api';
+import { testCaseExecutionsApiService } from '../services/testCaseExecutionsApi';
 import { useTestRunDetailsFilters } from '../hooks/useTestRunDetailsFilters';
 import { useApp } from '../context/AppContext';
 import { TestCase, TEST_RESULTS, TestResultId, TestResultValue, Tag } from '../types';
@@ -164,6 +164,8 @@ const TestRunDetails: React.FC = () => {
   const [isFiltersSidebarOpen, setIsFiltersSidebarOpen] = useState(false);
   const [updatingResults, setUpdatingResults] = useState<Set<string>>(new Set());
 
+  // Check if test run is closed (state 6)
+  const isTestRunClosed = testRun?.state === 6;
   // Calculate progress metrics from current test cases
   const calculateProgressMetrics = useCallback((currentTestCases: TestCaseWithExecution[]) => {
     const totalTests = currentTestCases.length;
@@ -216,18 +218,19 @@ const TestRunDetails: React.FC = () => {
       setTestRun(transformedTestRun);
 
       // Create execution result map from caseResults
+      // Create execution result map from executions
       const executionResultMap = new Map<string, number>();
       
-      console.log('🏃 Processing caseResults for execution mapping...');
-      console.log('🏃 Raw caseResults:', JSON.stringify(testRunResponse.data.attributes.caseResults, null, 2));
+      console.log('🏃 Processing executions for execution mapping...');
+      console.log('🏃 Raw executions:', JSON.stringify(testRunResponse.data.attributes.executions, null, 2));
       
-      if (testRunResponse.data.attributes.caseResults && Array.isArray(testRunResponse.data.attributes.caseResults)) {
-        testRunResponse.data.attributes.caseResults.forEach((caseResult: any) => {
-          console.log('🏃 Processing caseResult:', caseResult);
+      if (testRunResponse.data.attributes.executions && Array.isArray(testRunResponse.data.attributes.executions)) {
+        testRunResponse.data.attributes.executions.forEach((execution: any) => {
+          console.log('🏃 Processing execution:', execution);
           
-          // Extract test case ID from test_case_id field (format: "/api/test_cases/123")
-          const testCaseId = caseResult.test_case_id ? caseResult.test_case_id.split('/').pop() : null;
-          const rawResult = caseResult.result;
+          // Extract test case ID from test_case_id field (now a number)
+          const testCaseId = execution.test_case_id ? execution.test_case_id.toString() : null;
+          const rawResult = execution.result;
           
           let resultId: number;
           
@@ -250,11 +253,11 @@ const TestRunDetails: React.FC = () => {
             executionResultMap.set(testCaseId, resultId);
             console.log(`🏃 ✅ Mapped test case ${testCaseId} -> ${resultId} (${TEST_RESULTS[resultId as TestResultId]})`);
           } else {
-            console.log('🏃 ❌ Missing test case ID:', { test_case_id: caseResult.test_case_id, result: rawResult });
+            console.log('🏃 ❌ Missing test case ID:', { test_case_id: execution.test_case_id, result: rawResult });
           }
         });
       } else {
-        console.log('🏃 ❌ caseResults is not a valid array:', testRunResponse.data.attributes.caseResults);
+        console.log('🏃 ❌ executions is not a valid array:', testRunResponse.data.attributes.executions);
       }
       
       console.log('🏃 Final execution result map:', Array.from(executionResultMap.entries()));
@@ -365,10 +368,15 @@ const TestRunDetails: React.FC = () => {
   };
 
   const handleExecutionResultChange = async (testCaseId: string, newResultId: TestResultId) => {
-    if (!testRun) return;
+    if (!testRun || !id || isTestRunClosed) {
+      if (isTestRunClosed) {
+        toast.error('Cannot update execution results for closed test runs');
+      }
+      return;
+    }
 
-    const updateKey = `${testCaseId}-${testRun.id}`;
     const newResultLabel = TEST_RESULTS[newResultId];
+    const updateKey = `${testCaseId}-${id}`;
     
     try {
       // Add to updating set to show loading state
@@ -376,103 +384,12 @@ const TestRunDetails: React.FC = () => {
 
       console.log(`🔄 Updating execution result for test case ${testCaseId} in test run ${testRun.id} to: ${newResultId} (${newResultLabel})`);
 
-      // STEP 1: Get the current test case data to preserve ALL existing relationships
-      const testCaseResponse = await testCasesApiService.getTestCase(testCaseId);
-      const currentTestCase = testCaseResponse.data;
 
-      console.log('📋 Current test case data:', currentTestCase);
-      console.log('📋 Current test case relationships:', currentTestCase.relationships);
-
-      // STEP 2: Build the complete PATCH payload preserving ALL relationships
-      const patchPayload = {
-        data: {
-          type: "TestCase",
-          attributes: {
-            // Preserve all existing attributes
-            title: currentTestCase.attributes.title,
-            description: currentTestCase.attributes.description,
-            priority: currentTestCase.attributes.priority,
-            type: currentTestCase.attributes.type,
-            state: currentTestCase.attributes.state,
-            automation: currentTestCase.attributes.automation,
-            template: currentTestCase.attributes.template || 1,
-            preconditions: currentTestCase.attributes.preconditions || ''
-          },
-          relationships: {
-            // Preserve project relationship
-            project: currentTestCase.relationships.project,
-            
-            // Preserve folder relationship if it exists
-            ...(currentTestCase.relationships.folder && {
-              folder: currentTestCase.relationships.folder
-            }),
-            
-            // Preserve tags relationship if it exists
-            ...(currentTestCase.relationships.tags && {
-              tags: currentTestCase.relationships.tags
-            }),
-            
-            // Preserve step results relationship if it exists
-            ...(currentTestCase.relationships.stepResults && {
-              step_results: currentTestCase.relationships.stepResults
-            }),
-            
-            // Preserve shared steps relationship if it exists
-            ...(currentTestCase.relationships.sharedSteps && {
-              shared_steps: currentTestCase.relationships.sharedSteps
-            }),
-            
-            // Preserve attachments relationship if it exists
-            ...(currentTestCase.relationships.attachments && {
-              attachments: currentTestCase.relationships.attachments
-            }),
-            
-            // Preserve creator and editor relationships
-            creator: currentTestCase.relationships.creator,
-            editor: currentTestCase.relationships.editor,
-            
-            // STEP 3: Handle test_runs relationship - preserve existing + update current
-            test_runs: {
-              data: (() => {
-                // Get existing test run relationships
-                const existingTestRuns = currentTestCase.relationships?.testRuns?.data || [];
-                
-                console.log('📋 Existing test runs relationships:', existingTestRuns);
-                
-                // Filter out the current test run if it exists
-                const otherTestRuns = existingTestRuns.filter((tr: any) => {
-                  const trId = tr.id.split('/').pop();
-                  return trId !== testRun.id;
-                });
-                
-                console.log('📋 Other test runs (excluding current):', otherTestRuns);
-                
-                // Add the current test run with the new result
-                const updatedTestRuns = [
-                  ...otherTestRuns,
-                  {
-                    type: "TestRun",
-                    id: `/api/test_runs/${testRun.id}`,
-                    meta: {
-                      result: newResultId // Send the numeric ID to API
-                    }
-                  }
-                ];
-                
-                console.log('📋 Final test runs relationships:', updatedTestRuns);
-                return updatedTestRuns;
-              })()
-            }
-          }
-        }
-      };
-
-      console.log('📤 Sending PATCH request with complete payload:', JSON.stringify(patchPayload, null, 2));
-      const existingTestRuns = currentTestCase.relationships?.testRuns?.data || [];
-      
-      await apiService.authenticatedRequest(`/test_cases/${testCaseId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(patchPayload),
+      // Use new POST endpoint for test case executions
+      const response = await testCaseExecutionsApiService.createTestCaseExecution({
+        testCaseId,
+        testRunId: id,
+        result: newResultId
       });
 
       // Update local state to reflect the change immediately
@@ -840,7 +757,7 @@ const TestRunDetails: React.FC = () => {
                       <TestResultDropdown
                         value={testCase.executionStatus}
                         onChange={(newResultId) => handleExecutionResultChange(testCase.id, newResultId)}
-                        disabled={updatingResults.has(`${testCase.id}-${testRun?.id}`)}
+                        disabled={isTestRunClosed || updatingResults.has(`${testCase.id}-${testRun?.id}`)}
                         isUpdating={updatingResults.has(`${testCase.id}-${testRun?.id}`)}
                       />
                     </div>
@@ -875,6 +792,7 @@ const TestRunDetails: React.FC = () => {
         testCase={selectedTestCaseForDetails}
         context="test-run-details"
         testRunId={testRun?.id}
+        isTestRunClosed={isTestRunClosed}
         currentExecutionResult={selectedTestCaseForDetails ? 
           testCases.find(tc => tc.id === selectedTestCaseForDetails.id)?.executionStatus : undefined
         }
