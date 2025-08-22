@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import Modal from '../UI/Modal';
 import Button from '../UI/Button';
-import DraggableTestStep from '../TestCase/DraggableTestStep';
+import DraggableTestStepWithAutoUpload from '../TestCase/DraggableTestStepWithAutoUpload';
 
 interface TestStep {
   id: string;
@@ -177,7 +177,7 @@ const CreateSharedStepModal: React.FC<CreateSharedStepModalProps> = ({
                       >
                         <div className="space-y-4">
                           {testSteps.map((step, index) => (
-                            <DraggableTestStep
+                            <DraggableTestStepWithAutoUpload
                               key={step.id}
                               step={step}
                               index={index}
@@ -240,7 +240,6 @@ const CreateSharedStepModal: React.FC<CreateSharedStepModalProps> = ({
                 <Button 
                   type="submit" 
                   disabled={isSubmitting}
-                  onClick={handleSubmit}
                   size="lg"
                   className="px-8"
                 >

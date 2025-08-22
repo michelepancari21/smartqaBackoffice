@@ -59,11 +59,25 @@ export interface CreateSharedStepRequest {
     type: "SharedStep";
     attributes: {
       title: string;
-      description: string;
     };
     relationships: {
       project: {
         data: { type: string; id: string };
+      };
+      user: {
+        data: { type: string; id: string };
+      };
+      creator: {
+        data: { type: string; id: string };
+      };
+      step_results?: {
+        data: Array<{
+          type: string;
+          id: string;
+          meta: {
+            order: number;
+          };
+        }>;
       };
     };
   };
@@ -76,6 +90,17 @@ export interface UpdateSharedStepRequest {
       title: string;
       description: string;
     };
+    relationships?: {
+      step_results?: {
+        data: Array<{
+          type: string;
+          id: string;
+          meta: {
+            order: number;
+          };
+        }>;
+      };
+    };
   };
 }
 
@@ -85,6 +110,7 @@ export interface CreateSharedStepResponse {
 
 export interface UpdateSharedStepResponse {
   data: ApiSharedStep;
+  included?: ApiCreator[];
 }
 
 export interface SharedStep {
@@ -94,6 +120,7 @@ export interface SharedStep {
   projectId: string;
   stepsCount: number;
   usedInCount: number;
+  stepResults?: string[];
   createdBy: {
     id: string;
     name: string;
@@ -122,7 +149,7 @@ class SharedStepsApiService {
   }
 
   async getSharedSteps(projectId: string, page: number = 1, itemsPerPage: number = 30): Promise<SharedStepsApiResponse> {
-    const response = await apiService.authenticatedRequest(`/shared_steps?project=${projectId}&include=creator&page=${page}&itemsPerPage=${itemsPerPage}`);
+    const response = await apiService.authenticatedRequest(`/shared_steps?project=${projectId}&page=${page}&itemsPerPage=${itemsPerPage}&include=creator&order[createdAt]=desc`);
     return response || this.getDefaultSharedStepsResponse();
   }
 
@@ -130,7 +157,7 @@ class SharedStepsApiService {
     const isNumeric = /^\d+$/.test(searchTerm.trim());
     const searchParam = isNumeric ? `id=${encodeURIComponent(searchTerm)}` : `title=${encodeURIComponent(searchTerm)}`;
     
-    const response = await apiService.authenticatedRequest(`/shared_steps?project=${projectId}&include=creator&${searchParam}&page=${page}&itemsPerPage=${itemsPerPage}`);
+    const response = await apiService.authenticatedRequest(`/shared_steps?project=${projectId}&${searchParam}&page=${page}&itemsPerPage=${itemsPerPage}&include=creator&order[createdAt]=desc`);
     return response || this.getDefaultSharedStepsResponse();
   }
 
@@ -138,27 +165,47 @@ class SharedStepsApiService {
     return apiService.authenticatedRequest(`/shared_steps/${id}?include=creator`);
   }
 
+
   async createSharedStep(sharedStepData: {
     title: string;
-    description: string;
     projectId: string;
+    creatorId: string;
+    stepResults?: Array<{
+      id: string;
+      order: number;
+    }>;
   }): Promise<CreateSharedStepResponse> {
     const requestBody: CreateSharedStepRequest = {
       data: {
         type: "SharedStep",
         attributes: {
-          title: sharedStepData.title,
-          description: sharedStepData.description
+          title: sharedStepData.title
         },
         relationships: {
           project: {
-            data: { type: "Project", id: sharedStepData.projectId }
+            data: { type: "Project", id: `/api/projects/${sharedStepData.projectId}` }
+          },
+          user: {
+            data: { type: "User", id: `/api/users/${sharedStepData.creatorId}` }
           }
         }
       }
     };
 
-    const response = await apiService.authenticatedRequest('/shared_steps', {
+    // Add step results relationship if provided
+    if (sharedStepData.stepResults && sharedStepData.stepResults.length > 0) {
+      requestBody.data.relationships.step_results = {
+        data: sharedStepData.stepResults.map(stepResult => ({
+          type: "StepResult",
+          id: `/api/step_results/${stepResult.id}`,
+          meta: {
+            order: stepResult.order
+          }
+        }))
+      };
+    }
+
+    const response = await apiService.authenticatedRequest('/shared_steps?include=creator', {
       method: 'POST',
       body: JSON.stringify(requestBody),
     });
@@ -173,6 +220,10 @@ class SharedStepsApiService {
   async updateSharedStep(id: string, sharedStepData: {
     title: string;
     description: string;
+    stepResults?: Array<{
+      id: string;
+      order: number;
+    }>;
   }): Promise<UpdateSharedStepResponse> {
     const requestBody: UpdateSharedStepRequest = {
       data: {
@@ -184,7 +235,22 @@ class SharedStepsApiService {
       }
     };
 
-    const response = await apiService.authenticatedRequest(`/shared_steps/${id}`, {
+    // Add step results relationship if provided
+    if (sharedStepData.stepResults && sharedStepData.stepResults.length > 0) {
+      requestBody.data.relationships = {
+        step_results: {
+          data: sharedStepData.stepResults.map(stepResult => ({
+            type: "StepResult",
+            id: `/api/step_results/${stepResult.id}`,
+            meta: {
+              order: stepResult.order
+            }
+          }))
+        }
+      };
+    }
+
+    const response = await apiService.authenticatedRequest(`/shared_steps/${id}?include=creator`, {
       method: 'PATCH',
       body: JSON.stringify(requestBody),
     });
@@ -200,6 +266,95 @@ class SharedStepsApiService {
     await apiService.authenticatedRequest(`/shared_steps/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  async createStepResult(stepData: {
+    step: string;
+    result: string;
+    userId: string;
+  }): Promise<{
+    data: {
+      id: string;
+      type: string;
+      attributes: {
+        id: number;
+        step: string;
+        result: string;
+      };
+    };
+  }> {
+    const requestBody = {
+      data: {
+        type: "StepResult",
+        attributes: {
+          step: stepData.step,
+          result: stepData.result
+        },
+        relationships: {
+          user: {
+            data: {
+              type: "User",
+              id: `/api/users/${stepData.userId}`
+            }
+          }
+        }
+      }
+    };
+
+    const response = await apiService.authenticatedRequest('/step_results', {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response) {
+      throw new Error('No response received from server');
+    }
+
+    return response;
+  }
+
+  async updateStepResult(id: string, stepData: {
+    step: string;
+    result: string;
+    userId: string;
+  }): Promise<void> {
+    const requestBody = {
+      data: {
+        type: "StepResult",
+        attributes: {
+          step: stepData.step,
+          result: stepData.result
+        },
+        relationships: {
+          user: {
+            data: {
+              type: "User",
+              id: `/api/users/${stepData.userId}`
+            }
+          }
+        }
+      }
+    };
+
+    await apiService.authenticatedRequest(`/step_results/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(requestBody),
+    });
+  }
+
+  async getStepResult(id: string): Promise<{
+    data: {
+      id: string;
+      type: string;
+      attributes: {
+        id: number;
+        step: string;
+        result: string;
+        order: number;
+      };
+    };
+  }> {
+    return apiService.authenticatedRequest(`/step_results/${id}`);
   }
 
   // Helper method to find creator in included data
@@ -226,6 +381,11 @@ class SharedStepsApiService {
     // Count test cases using this shared step
     const usedInCount = apiSharedStep.relationships.testCases?.data?.length || 0;
 
+    // Extract step result IDs from relationships
+    const stepResults = apiSharedStep.relationships.stepResults?.data?.map(stepResult => 
+      stepResult.id.split('/').pop() || stepResult.id
+    ) || [];
+
     return {
       id: apiSharedStep.attributes.id.toString(),
       title: apiSharedStep.attributes.title,
@@ -233,6 +393,7 @@ class SharedStepsApiService {
       projectId: projectId,
       stepsCount: stepsCount,
       usedInCount: usedInCount,
+      stepResults: stepResults,
       createdBy: {
         id: creatorId,
         name: creator?.attributes.name || 'Unknown User',

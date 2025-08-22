@@ -4,7 +4,7 @@ import { useLoading } from '../../context/LoadingContext';
 
 interface ButtonProps {
   children: React.ReactNode;
-  onClick?: () => void;
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'warning';
   size?: 'sm' | 'md' | 'lg';
   icon?: LucideIcon;
@@ -27,17 +27,17 @@ const Button: React.FC<ButtonProps> = ({
 }) => {
   const { loading, setLoading } = useLoading();
 
-  const handleClick = async () => {
+  const handleClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
     if (onClick && !loading.isLoading && !disabled) {
       if (loadingMessage) {
         setLoading(true, loadingMessage);
         try {
-          await onClick();
+          await onClick(event);
         } finally {
           setLoading(false);
         }
       } else {
-        onClick();
+        onClick(event);
       }
     }
   };

@@ -4,12 +4,13 @@ import { foldersApiService } from '../services/foldersApi';
 import { TestCase } from '../types';
 import toast from 'react-hot-toast';
 
-export const useTestCases = (projectId?: string | null, folderId?: string | null, onFoldersExtracted?: (folders: any[]) => void) => {
+export const useTestCases = (projectId?: string | null, folderId?: string | null, onFoldersExtracted?: (folders: any[]) => void, skipInitialLoad?: boolean) => {
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [allTestCases, setAllTestCases] = useState<TestCase[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentFilterMode, setCurrentFilterMode] = useState<'folder' | 'search' | 'automation' | 'all'>('all');
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalItems: 0,
@@ -23,7 +24,7 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
   const hasInitialLoad = useRef<boolean>(false);
 
   // Initial load - fetch all test cases for project and extract folders
-  const fetchAllTestCasesAndExtractFolders = useCallback(async (targetProjectId?: string) => {
+  const fetchAllTestCasesAndExtractFolders = useCallback(async (targetProjectId?: string, initialFilters?: any) => {
     const useProjectId = targetProjectId || projectId;
     
     if (!useProjectId) {
@@ -38,15 +39,150 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       setLoading(true);
       setError(null);
       
-      console.log('📋 Initial load: Fetching ALL test cases for project:', useProjectId);
+      if (initialFilters) {
+        console.log('📋 Initial load with filters: Fetching filtered test cases for project:', useProjectId, 'filters:', initialFilters);
+      } else {
+        console.log('📋 Initial load: Fetching ALL test cases for project:', useProjectId);
+      }
       
-      // Fetch all test cases for the project (without folder filter for initial load)
-      let response: TestCasesApiResponse = await testCasesApiService.getTestCases(
-        1, 
-        1000, // Get many test cases to ensure we get all
-        useProjectId
-        // No folder parameter for initial load - will be sorted by creation date desc
-      );
+      let response: TestCasesApiResponse;
+      
+      if (initialFilters) {
+        // If we have initial filters (from dashboard navigation), apply them immediately
+        response = await testCasesApiService.filterTestCasesWithMultipleFilters(
+          initialFilters,
+          1,
+          30, // Use normal pagination for filtered results
+          useProjectId
+        );
+        
+        // Also fetch all test cases for folder extraction (separate call with pagination)
+        // But don't update the display test cases with this response
+        let allTestCasesData: any[] = [];
+        let totalPages = 1;
+        
+        // Fetch first page to get total pages info
+        const firstPageResponse = await testCasesApiService.getTestCases(
+          1, 
+          30,
+          useProjectId
+        );
+        
+        totalPages = Math.ceil(firstPageResponse.meta.totalItems / firstPageResponse.meta.itemsPerPage);
+        console.log(`📋 Folder extraction - Total items: ${firstPageResponse.meta.totalItems}, Total pages: ${totalPages}`);
+        
+        // Add first page data
+        allTestCasesData = [...firstPageResponse.data];
+        
+        // Fetch remaining pages if any
+        for (let page = 2; page <= totalPages; page++) {
+          console.log(`📋 Folder extraction - Fetching page ${page}/${totalPages}...`);
+          const pageResponse = await testCasesApiService.getTestCases(
+            page, 
+            30,
+            useProjectId
+          );
+          
+          allTestCasesData = [...allTestCasesData, ...pageResponse.data];
+        }
+        
+        console.log(`📋 Folder extraction - Total test cases fetched: ${allTestCasesData.length}`);
+        
+        // Use all test cases for folder extraction only
+        const allTransformedTestCases = allTestCasesData.map(apiTestCase => 
+          testCasesApiService.transformApiTestCase(apiTestCase, firstPageResponse.included)
+        );
+        setAllTestCases(allTransformedTestCases);
+        
+        // Extract folders from all test cases
+        const folderMap = new Map();
+        allTransformedTestCases.forEach(testCase => {
+          if (testCase.folderId) {
+            if (!folderMap.has(testCase.folderId)) {
+              folderMap.set(testCase.folderId, {
+                id: testCase.folderId,
+                name: `Folder ${testCase.folderId}`,
+                testCasesCount: 0
+              });
+            }
+            const folder = folderMap.get(testCase.folderId);
+            folder.testCasesCount++;
+          }
+        });
+        
+        const extractedFolders = Array.from(folderMap.values());
+        if (onFoldersExtracted) {
+          onFoldersExtracted(extractedFolders);
+        }
+        
+      } else {
+        // Normal load - fetch first page of test cases only
+        response = await testCasesApiService.getTestCases(
+          1, 
+          30, // Use default page size since API limits to 30 anyway
+          useProjectId
+        );
+        
+        console.log(`📋 First page: ${response.data.length} test cases, Total: ${response.meta.totalItems}`);
+        
+        // For folder extraction, we still need all test cases
+        // But we'll fetch them separately and only when needed
+        let allTestCasesData: any[] = [];
+        let totalPages = Math.ceil(response.meta.totalItems / response.meta.itemsPerPage);
+        
+        if (totalPages > 1) {
+          console.log(`📋 Fetching all ${totalPages} pages for folder extraction...`);
+          
+          // Add first page data
+          allTestCasesData = [...response.data];
+          
+          // Fetch remaining pages for folder extraction
+          for (let page = 2; page <= totalPages; page++) {
+            console.log(`📋 Folder extraction - Fetching page ${page}/${totalPages}...`);
+            const pageResponse = await testCasesApiService.getTestCases(
+              page, 
+              30,
+              useProjectId
+            );
+            
+            allTestCasesData = [...allTestCasesData, ...pageResponse.data];
+          }
+          
+          console.log(`📋 Folder extraction - Total test cases: ${allTestCasesData.length}`);
+        } else {
+          allTestCasesData = response.data;
+        }
+        
+        // Set all test cases for folder extraction
+        setAllTestCases(allTestCasesData.map(apiTestCase => 
+          testCasesApiService.transformApiTestCase(apiTestCase, response.included)
+        ));
+        
+        // Extract folders from all test cases
+        const folderMap = new Map();
+        const allTransformedTestCases = allTestCasesData.map(apiTestCase => 
+          testCasesApiService.transformApiTestCase(apiTestCase, response.included)
+        );
+        
+        allTransformedTestCases.forEach(testCase => {
+          if (testCase.folderId) {
+            if (!folderMap.has(testCase.folderId)) {
+              folderMap.set(testCase.folderId, {
+                id: testCase.folderId,
+                name: `Folder ${testCase.folderId}`,
+                testCasesCount: 0
+              });
+            }
+            const folder = folderMap.get(testCase.folderId);
+            folder.testCasesCount++;
+          }
+        });
+        
+        const extractedFolders = Array.from(folderMap.values());
+        if (onFoldersExtracted) {
+          onFoldersExtracted(extractedFolders);
+        }
+      }
       
       console.log('📋 API Response:', response);
       
@@ -61,55 +197,33 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
         itemsPerPage: 30
       };
       
-      console.log('📋 Raw API data:', responseData.length, 'test cases');
+      console.log('📋 Raw API data:', responseData.length, initialFilters ? 'filtered test cases' : 'test cases');
       
       const transformedTestCases = responseData.map(apiTestCase => 
         testCasesApiService.transformApiTestCase(apiTestCase, response.included)
       );
       
-      // Wait for all transformations to complete (since they're now async)
-      const resolvedTestCases = await Promise.all(transformedTestCases);
-      
       console.log('📋 Transformed test cases:', transformedTestCases);
       
-      // Store all test cases
-      setAllTestCases(resolvedTestCases);
-      setTestCases(resolvedTestCases); // Show all initially
+      // Set the display test cases (filtered or all)
+      setTestCases(transformedTestCases);
       
-      // Extract unique folders from test cases
-      const folderMap = new Map();
-      resolvedTestCases.forEach(testCase => {
-        console.log('📁 Test case folder info:', testCase.id, 'folderId:', testCase.folderId);
-        if (testCase.folderId) {
-          if (!folderMap.has(testCase.folderId)) {
-            folderMap.set(testCase.folderId, {
-              id: testCase.folderId,
-              name: `Folder ${testCase.folderId}`, // Temporary name, will be updated from API
-              testCasesCount: 0
-            });
-          }
-          const folder = folderMap.get(testCase.folderId);
-          folder.testCasesCount++;
-        }
+      // Set pagination
+      setPagination({
+        currentPage: responseMeta.currentPage,
+        totalItems: responseMeta.totalItems,
+        itemsPerPage: responseMeta.itemsPerPage,
+        totalPages: Math.ceil(responseMeta.totalItems / responseMeta.itemsPerPage)
       });
       
-      const extractedFolders = Array.from(folderMap.values());
-      console.log('📁 Extracted', extractedFolders.length, 'unique folders from test cases:', extractedFolders);
-      
-      // Notify parent about extracted folders
-      if (onFoldersExtracted) {
-        console.log('📁 Calling onFoldersExtracted with:', extractedFolders);
-        onFoldersExtracted(extractedFolders);
+      if (initialFilters) {
+        // Set the current filter mode to indicate we have filters applied
+        setCurrentFilterMode('multiple');
+      } else {
+        setCurrentFilterMode('all');
       }
       
-      console.log('✅ Fetched', resolvedTestCases.length, 'total test cases for project');
-      
-      setPagination({
-        currentPage: 1,
-        totalItems: resolvedTestCases.length,
-        itemsPerPage: 30,
-        totalPages: Math.ceil(resolvedTestCases.length / 30)
-      });
+      console.log('✅ Fetched', transformedTestCases.length, initialFilters ? 'filtered test cases' : 'total test cases', 'for project');
       
       hasInitialLoad.current = true;
       
@@ -152,58 +266,42 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
     }
   }, [allTestCases, folderId]);
 
-  // Fonction fetchTestCases stable - now fetches by project and folder
-  const fetchTestCases = useCallback(async (page: number = 1, targetProjectId?: string, targetFolderId?: string) => {
-    const useProjectId = targetProjectId || projectId;
-    const useFolderId = targetFolderId || folderId;
+  // Function to show folder-filtered test cases with server-side pagination
+  const showFolderTestCases = useCallback(async (targetFolderId?: string | null, page: number = 1) => {
+    const useFolderId = targetFolderId !== undefined ? targetFolderId : folderId;
     
-    if (!useProjectId) {
-      console.log('🚫 Missing projectId, clearing test cases');
+    console.log('📁 Showing test cases for folder:', useFolderId || 'all', 'page:', page);
+    
+    if (!projectId) {
       setTestCases([]);
-      setLoading(false);
       return;
     }
-
+    
     try {
       setLoading(true);
       setError(null);
       
-      console.log('📋 Fetching test cases for project:', useProjectId, 'folder:', useFolderId, 'page:', page);
-      
-      let response: TestCasesApiResponse = await testCasesApiService.getTestCases(
+      // Make API call with pagination
+      const response = await testCasesApiService.getTestCases(
         page, 
         30, 
-        useProjectId,
-        useFolderId
+        projectId,
+        useFolderId || undefined
       );
       
-      if (!response) {
-        response = testCasesApiService.getDefaultTestCasesResponse();
-      }
-      
-      const responseData = response?.data || [];
-      const responseMeta = response?.meta || {
-        currentPage: 1,
-        totalItems: 0,
-        itemsPerPage: 30
-      };
-      
-      const transformedTestCases = responseData.map(apiTestCase => 
+      const transformedTestCases = response.data.map(apiTestCase => 
         testCasesApiService.transformApiTestCase(apiTestCase, response.included)
       );
       
-      // Wait for all transformations to complete (since they're now async)
-      const resolvedTestCases = await Promise.all(transformedTestCases);
-      
-      console.log('✅ Fetched', resolvedTestCases.length, 'test cases for folder:', useFolderId);
-      
-      setTestCases(resolvedTestCases);
+      setTestCases(transformedTestCases);
       setPagination({
-        currentPage: responseMeta.currentPage,
-        totalItems: responseMeta.totalItems,
-        itemsPerPage: responseMeta.itemsPerPage,
-        totalPages: Math.ceil(responseMeta.totalItems / responseMeta.itemsPerPage)
+        currentPage: response.meta.currentPage,
+        totalItems: response.meta.totalItems,
+        itemsPerPage: response.meta.itemsPerPage,
+        totalPages: Math.ceil(response.meta.totalItems / response.meta.itemsPerPage)
       });
+      
+      setCurrentFilterMode('folder');
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch test cases';
@@ -248,7 +346,7 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       };
       
       const transformedTestCases = responseData.map(apiTestCase => 
-        testCasesApiService.transformApiTestCase(apiTestCase)
+        testCasesApiService.transformApiTestCase(apiTestCase, response.included)
       );
       
       setTestCases(transformedTestCases);
@@ -301,7 +399,7 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       };
       
       const transformedTestCases = responseData.map(apiTestCase => 
-        testCasesApiService.transformApiTestCase(apiTestCase)
+        testCasesApiService.transformApiTestCase(apiTestCase, response.included)
       );
       
       setTestCases(transformedTestCases);
@@ -354,7 +452,7 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       };
       
       const transformedTestCases = responseData.map(apiTestCase => 
-        testCasesApiService.transformApiTestCase(apiTestCase)
+        testCasesApiService.transformApiTestCase(apiTestCase, response.included)
       );
       
       setTestCases(transformedTestCases);
@@ -460,7 +558,7 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       };
       
       const transformedTestCases = responseData.map(apiTestCase => 
-        testCasesApiService.transformApiTestCase(apiTestCase)
+        testCasesApiService.transformApiTestCase(apiTestCase, response.included)
       );
       
       setTestCases(transformedTestCases);
@@ -513,7 +611,7 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       };
       
       const transformedTestCases = responseData.map(apiTestCase => 
-        testCasesApiService.transformApiTestCase(apiTestCase)
+        testCasesApiService.transformApiTestCase(apiTestCase, response.included)
       );
       
       setTestCases(transformedTestCases);
@@ -536,8 +634,9 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
 
   const filterTestCasesWithMultipleFilters = useCallback(async (filters: {
     automationStatus?: 1 | 2 | 3 | 4 | 5;
-    priority?: 'low' | 'medium' | 'high' | 'critical';
-    type?: 'functional' | 'regression' | 'smoke' | 'integration' | 'performance';
+    priority?: number;
+    type?: number;
+    state?: number;
     tagIds?: string[];
   }, page: number = 1) => {
     if (!projectId) {
@@ -571,7 +670,7 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       };
       
       const transformedTestCases = responseData.map(apiTestCase => 
-        testCasesApiService.transformApiTestCase(apiTestCase)
+        testCasesApiService.transformApiTestCase(apiTestCase, response.included)
       );
       
       setTestCases(transformedTestCases);
@@ -595,23 +694,42 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
   const createTestCase = useCallback(async (testCaseData: {
     title: string;
     description: string;
-    priority: 'low' | 'medium' | 'high' | 'critical';
-    testType: 'functional' | 'regression' | 'smoke' | 'integration' | 'performance';
-    status: 'draft' | 'active' | 'deprecated';
+    priority: number;
+    testCaseType: number;
+    state: number;
     automationStatus: 1 | 2 | 3 | 4 | 5;
     template: number;
     preconditions: string;
     tags: Tag[];
+    createdAttachments?: Array<{
+      type: "Attachment";
+      id: string;
+    }>;
     testSteps?: Array<{
       id: string;
       step: string;
       result: string;
       originalId?: string;
     }>;
-    creatorId?: string;
+    stepResultsRelationships?: Array<{
+      type: string;
+      id: string;
+      meta: {
+        order: number;
+      };
+    }>;
+    sharedStepsRelationships?: Array<{
+      type: string;
+      id: string;
+      meta: {
+        order: number;
+      };
+    }>;
   }) => {
     try {
       setLoading(true);
+      
+      console.log('📎 HOOK DEBUG: Received testCaseData.createdAttachments:', testCaseData.createdAttachments);
       
       // Handle step results - create them first if they exist
       let stepResults: Array<{
@@ -621,18 +739,31 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       
       if (testCaseData.testSteps && testCaseData.testSteps.length > 0 && testCaseData.creatorId) {
         console.log('🔄 Creating step results for new test case...');
+        console.log('🔄 Received stepResultsRelationships:', testCaseData.stepResultsRelationships);
+        
+        // Create a map of UI step IDs to their order from relationships
+        const stepOrderMap = new Map<string, number>();
+        if (testCaseData.stepResultsRelationships) {
+          testCaseData.stepResultsRelationships.forEach(rel => {
+            stepOrderMap.set(rel.id, rel.meta.order);
+            console.log(`📋 Step order mapping: UI ID ${rel.id} → order ${rel.meta.order}`);
+          });
+        }
         
         for (let i = 0; i < testCaseData.testSteps.length; i++) {
           const step = testCaseData.testSteps[i];
+          const stepOrder = stepOrderMap.get(step.id) || (i + 1); // Fallback to index + 1
+          
+          console.log(`🔄 Processing step ${i + 1}: UI ID ${step.id} → order ${stepOrder}`);
           
           if (step.originalId) {
             // Existing step result - just include in relationships (no POST needed)
             stepResults.push({
               id: step.originalId,
-              order: i + 1 // Order starts from 1
+              order: stepOrder
             });
             
-            console.log(`✅ Including existing step result ${step.originalId} with order ${i + 1}`);
+            console.log(`✅ Including existing step result ${step.originalId} with order ${stepOrder}`);
           } else {
             const testStep = testCaseData.testSteps[i];
             // New step result - create it via POST request (only for new ones)
@@ -645,10 +776,10 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
               
               stepResults.push({
                 id: stepResultResponse.data.attributes.id.toString(),
-                order: i + 1 // Order starts from 1
+                order: stepOrder
               });
               
-              console.log(`Created step result ${i + 1}:`, stepResultResponse.data.id);
+              console.log(`✅ Created step result with API ID ${stepResultResponse.data.id} and order ${stepOrder}`);
             } catch (stepError) {
               console.error(`Failed to create step result ${i + 1}:`, stepError);
               throw new Error(`Failed to create step result ${i + 1}: ${stepError instanceof Error ? stepError.message : 'Unknown error'}`);
@@ -659,10 +790,64 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
         console.log('All step results created:', stepResults);
       }
       
-      // Create the test case with step results
+      // Create attachments via API first
+      const createdAttachments: Array<{ id: string; url: string }> = [];
+      
+      if (testCaseData.uploadedAttachments && testCaseData.uploadedAttachments.length > 0 && authState.user?.id) {
+        console.log('📎 Creating', testCaseData.uploadedAttachments.length, 'attachments via API...');
+        
+        for (const attachment of testCaseData.uploadedAttachments) {
+          try {
+            console.log('📎 Creating attachment for:', attachment.file.name);
+            
+            const attachmentResponse = await attachmentsApiService.createAttachment({
+              url: attachment.cloudFrontUrl,
+              userId: testCaseData.creatorId
+            });
+            
+            createdAttachments.push({
+              id: attachmentResponse.data.attributes.id.toString(),
+              url: attachment.cloudFrontUrl
+            });
+            
+            console.log('✅ Created attachment with ID:', attachmentResponse.data.attributes.id);
+          } catch (error) {
+            console.error('❌ Failed to create attachment:', error);
+            throw new Error(`Failed to create attachment for ${attachment.file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
+        
+        console.log('✅ All attachments created:', createdAttachments);
+      }
+      console.log('📎 HOOK: Passing createdAttachments to API service:', testCaseData.createdAttachments);
+      
+      // Create the test case with step results and attachments
+      let sharedStepsForApi: Array<{
+        id: string;
+        order: number;
+      }> = [];
+      
+      if (testCaseData.sharedStepsRelationships && testCaseData.sharedStepsRelationships.length > 0) {
+        console.log('🔄 Processing shared steps relationships for new test case...');
+        console.log('🔄 Received sharedStepsRelationships:', testCaseData.sharedStepsRelationships);
+        
+        sharedStepsForApi = testCaseData.sharedStepsRelationships.map(relationship => ({
+          id: relationship.id.split('/').pop() || '', // Extract ID from API path
+          order: relationship.meta.order
+        }));
+        
+        console.log('All shared steps relationships processed:', sharedStepsForApi);
+      }
+      
+      // STEP 2: Create the test case with attachment relationships
       const response = await testCasesApiService.createTestCase({
         ...testCaseData,
-        stepResults
+        projectId: projectId!,
+        folderId: folderId || undefined,
+        creatorId: testCaseData.creatorId || '',
+        stepResults,
+        sharedStepsForApi,
+        createdAttachments: testCaseData.createdAttachments
       });
       
       const newTestCase = testCasesApiService.transformApiTestCase(response.data);
@@ -674,16 +859,14 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
         totalPages: Math.ceil((prev.totalItems + 1) / prev.itemsPerPage)
       }));
       
-      toast.success('Test case created successfully');
-      
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update test case';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create test case';
       toast.error(errorMessage);
       throw err;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId, folderId]);
 
   const updateTestCase = useCallback(async (id: string, testCaseData: {
     title: string;
@@ -702,11 +885,29 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       originalId?: string;
     }>;
     userId?: string;
+    stepResultsRelationships?: Array<{
+      type: string;
+      id: string;
+      meta: {
+        order: number;
+      };
+    }>;
+    sharedStepsRelationships?: Array<{
+      type: string;
+      id: string;
+      meta: {
+        order: number;
+      };
+    }>;
+    createdAttachments?: Array<{
+      type: "Attachment";
+      id: string;
+    }>;
   }) => {
     try {
       setLoading(true);
       
-      // Handle step results - create new ones and prepare relationships
+      // Handle step results - update existing ones and create new ones
       let stepResultsRelationships: Array<{
         type: string;
         id: string;
@@ -717,22 +918,49 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       
       if (testCaseData.testSteps && testCaseData.testSteps.length > 0 && testCaseData.userId) {
         console.log('🔄 Processing step results for test case update...');
+        console.log('🔄 Received stepResultsRelationships:', testCaseData.stepResultsRelationships);
+        
+        // Create a map of UI step IDs to their order from relationships
+        const stepOrderMap = new Map<string, number>();
+        if (testCaseData.stepResultsRelationships) {
+          testCaseData.stepResultsRelationships.forEach(rel => {
+            stepOrderMap.set(rel.id, rel.meta.order);
+            console.log(`📋 Step order mapping: UI ID ${rel.id} → order ${rel.meta.order}`);
+          });
+        }
         
         for (let i = 0; i < testCaseData.testSteps.length; i++) {
           const step = testCaseData.testSteps[i];
-          const order = i + 1; // Order starts from 1
+          const stepOrder = stepOrderMap.get(step.id) || (i + 1); // Use mapped order or fallback to index + 1
+          
+          console.log(`🔄 Processing step ${i + 1}: UI ID ${step.id} → order ${stepOrder}`);
           
           if (step.originalId) {
-            // Existing step result - just include in relationships (no POST needed)
+            console.log(`🔄 Updating existing step result ${step.originalId} with order ${stepOrder}`);
+            
+            try {
+              await testCasesApiService.updateStepResult(step.originalId, {
+                step: step.step,
+                result: step.result,
+                userId: testCaseData.userId
+              });
+              
+              console.log(`✅ Updated step result ${step.originalId}`);
+            } catch (stepError) {
+              console.error(`❌ Failed to update step result ${step.originalId}:`, stepError);
+              throw new Error(`Failed to update step result ${stepOrder}: ${stepError instanceof Error ? stepError.message : 'Unknown error'}`);
+            }
+            
+            // Include in relationships
             stepResultsRelationships.push({
               type: "StepResult",
               id: `/api/step_results/${step.originalId}`,
               meta: {
-                order: order
+                order: stepOrder
               }
             });
             
-            console.log(`✅ Including existing step result ${step.originalId} with order ${order}`);
+            console.log(`✅ Including updated step result ${step.originalId} with order ${stepOrder}`);
           } else {
             // New step result - create it via POST request
             try {
@@ -746,35 +974,54 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
                 type: "StepResult",
                 id: `/api/step_results/${stepResultResponse.data.attributes.id}`,
                 meta: {
-                  order: order
+                  order: stepOrder
                 }
               });
               
-              console.log(`✅ Created new step result ${order}:`, stepResultResponse.data.id);
+              console.log(`✅ Created new step result ${stepOrder}:`, stepResultResponse.data.id);
             } catch (stepError) {
-              console.error(`❌ Failed to create step result ${order}:`, stepError);
-              throw new Error(`Failed to create step result ${order}: ${stepError instanceof Error ? stepError.message : 'Unknown error'}`);
+              console.error(`❌ Failed to create step result ${stepOrder}:`, stepError);
+              throw new Error(`Failed to create step result ${stepOrder}: ${stepError instanceof Error ? stepError.message : 'Unknown error'}`);
             }
           }
         }
         
-        console.log('✅ All step results processed:', stepResultsRelationships);
+        console.log('✅ All step results updated/created and processed:', stepResultsRelationships);
       }
       
-      // Update the test case with step results relationships
+      // Handle shared steps relationships - use the provided relationships with order
+      let sharedStepsRelationships: Array<{
+        type: string;
+        id: string;
+        meta: {
+          order: number;
+        };
+      }> = [];
+      
+      if (testCaseData.sharedStepsRelationships && testCaseData.sharedStepsRelationships.length > 0) {
+        console.log('🔄 Processing shared steps relationships for test case update...');
+        console.log('🔄 Received sharedStepsRelationships:', testCaseData.sharedStepsRelationships);
+        
+        sharedStepsRelationships = testCaseData.sharedStepsRelationships;
+        
+        console.log('All shared steps relationships processed:', sharedStepsRelationships);
+      }
+      
+      // Update the test case with step results relationships and attachments
       const response = await testCasesApiService.updateTestCase(id, {
         ...testCaseData,
-        stepResultsRelationships
+        description: testCaseData.description,
+        stepResultsRelationships,
+        sharedStepsRelationships,
+        createdAttachments: testCaseData.createdAttachments // This now contains both existing and newly created
       });
       
-      const updatedTestCase = await testCasesApiService.transformApiTestCase(response.data);
+      const updatedTestCase = testCasesApiService.transformApiTestCase(response.data);
       setTestCases(prevTestCases => 
         prevTestCases.map(testCase => 
           testCase.id === id ? updatedTestCase : testCase
         )
       );
-      
-      toast.success('Test case updated successfully');
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update test case';
@@ -821,9 +1068,11 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
 
     previousProjectId.current = projectId;
 
-    if (projectId && projectChanged) {
+    if (projectId && projectChanged && !skipInitialLoad) {
       console.log('📂 Project changed, doing initial load for project:', projectId);
       hasInitialLoad.current = false;
+      // Only do initial load if we don't have filters applied from navigation
+      // The parent component will handle the initial load with filters if needed
       fetchAllTestCasesAndExtractFolders(projectId);
     } else if (!projectId) {
       console.log('🚫 No project selected, clearing test cases');
@@ -832,18 +1081,22 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
       setLoading(false);
       hasInitialLoad.current = false;
     }
-  }, [projectId, fetchAllTestCasesAndExtractFolders]);
+  }, [projectId, fetchAllTestCasesAndExtractFolders, skipInitialLoad]);
 
   // Effect for folder changes (filter existing data)
   useEffect(() => {
     const folderChanged = previousFolderId.current !== folderId;
     
-    // Only apply folder filtering if we're in folder mode or switching from other modes
-    if (folderChanged && hasInitialLoad.current && (currentFilterMode === 'folder' || currentFilterMode === 'all')) {
+    // When folder changes, we need to re-apply any active filters with the new folder context
+    if (folderChanged && hasInitialLoad.current) {
       previousFolderId.current = folderId;
-      filterTestCasesByFolder(folderId);
+      console.log('📁 Folder changed to:', folderId || 'none (all test cases)');
+      
+      // Don't automatically filter by folder - let the parent component handle this
+      // The parent component will check for active filters and apply them with the new folder context
+      console.log('📁 Folder changed - parent component will handle filter application');
     }
-  }, [folderId, filterTestCasesByFolder, currentFilterMode]);
+  }, [folderId, filterTestCasesByFolder]);
 
   return {
     testCases, // Filtered by selected folder
@@ -853,9 +1106,11 @@ export const useTestCases = (projectId?: string | null, folderId?: string | null
     pagination,
     currentFilterMode,
     setCurrentFilterMode,
+    isInitialLoadComplete,
     fetchAllTestCasesAndExtractFolders,
+    fetchAllTestCasesForProject: fetchAllTestCasesAndExtractFolders,
     filterTestCasesByFolder,
-    fetchTestCases,
+    showFolderTestCases,
     searchTestCases,
     filterTestCasesByAutomation,
     filterTestCasesByPriority,

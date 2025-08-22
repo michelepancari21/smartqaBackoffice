@@ -131,15 +131,16 @@ export const useSharedSteps = (projectId?: string | null) => {
 
   const createSharedStep = useCallback(async (sharedStepData: {
     title: string;
-    description: string;
     projectId: string;
+    creatorId: string;
   }) => {
     try {
       setLoading(true);
       
       const response = await sharedStepsApiService.createSharedStep(sharedStepData);
       
-      const newSharedStep = sharedStepsApiService.transformApiSharedStep(response.data);
+      // Transform the response to ensure creator information is properly displayed
+      const newSharedStep = sharedStepsApiService.transformApiSharedStep(response.data, response.included);
       setSharedSteps(prevSharedSteps => [newSharedStep, ...prevSharedSteps]);
       
       setPagination(prev => ({
@@ -147,6 +148,7 @@ export const useSharedSteps = (projectId?: string | null) => {
         totalItems: prev.totalItems + 1,
         totalPages: Math.ceil((prev.totalItems + 1) / prev.itemsPerPage)
       }));
+      
       
       toast.success('Shared step created successfully');
       
@@ -168,7 +170,7 @@ export const useSharedSteps = (projectId?: string | null) => {
       
       const response = await sharedStepsApiService.updateSharedStep(id, sharedStepData);
       
-      const updatedSharedStep = sharedStepsApiService.transformApiSharedStep(response.data);
+      const updatedSharedStep = sharedStepsApiService.transformApiSharedStep(response.data, response.included);
       setSharedSteps(prevSharedSteps => 
         prevSharedSteps.map(sharedStep => 
           sharedStep.id === id ? updatedSharedStep : sharedStep

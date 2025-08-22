@@ -1,0 +1,270 @@
+import React, { useState, useEffect } from 'react';
+import { Loader, FolderPlus } from 'lucide-react';
+import Modal from '../UI/Modal';
+import Button from '../UI/Button';
+import { Folder } from '../../services/foldersApi';
+
+interface CreateFolderModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (data: {
+    name: string;
+    description: string;
+    parentId?: string;
+    childrenIds: string[];
+  }) => Promise<void>;
+  isSubmitting: boolean;
+  availableFolders: Folder[];
+}
+
+const CreateFolderModal: React.FC<CreateFolderModalProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  isSubmitting,
+  availableFolders
+}) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    parentId: '',
+    childrenIds: [] as string[]
+  });
+
+  // Reset form when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        name: '',
+        description: '',
+        parentId: '',
+        childrenIds: []
+      });
+    }
+  }, [isOpen]);
+
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleChildrenChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const clickedValue = e.target.value;
+    
+    setFormData(prev => {
+      const currentChildren = prev.childrenIds || [];
+      
+      // Toggle behavior: if already selected, remove it; if not selected, add it
+      if (currentChildren.includes(clickedValue)) {
+        return { 
+          ...prev, 
+          childrenIds: currentChildren.filter(id => id !== clickedValue) 
+        };
+      } else {
+        return { 
+          ...prev, 
+          childrenIds: [...currentChildren, clickedValue] 
+        };
+      }
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const submitData = {
+      name: formData.name,
+      description: formData.description,
+      parentId: formData.parentId || undefined,
+      childrenIds: formData.childrenIds
+    };
+
+    await onSubmit(submitData);
+  };
+
+  // Get available folders for parent selection (exclude folders that would create circular references)
+  const getAvailableParentFolders = () => {
+    return availableFolders.filter(folder => 
+      !formData.childrenIds.includes(folder.id)
+    );
+  };
+
+  // Get available folders for children selection (exclude selected parent and its ancestors)
+  const getAvailableChildrenFolders = () => {
+    if (!formData.parentId) {
+      // If no parent selected, show all root folders as potential children
+      return availableFolders;
+    }
+    
+    // Find the selected parent folder and return only its immediate direct children
+    const selectedParent = availableFolders.find(f => f.id === formData.parentId);
+    if (!selectedParent) return [];
+    
+    // Return only the immediate children of the selected parent (no nested children)
+    return selectedParent.children || [];
+  };
+
+  // Flatten folder tree for dropdown display
+  const flattenFolders = (folders: Folder[], level = 0): Array<{ folder: Folder; level: number }> => {
+    const result: Array<{ folder: Folder; level: number }> = [];
+    
+    folders.forEach(folder => {
+      result.push({ folder, level });
+      if (folder.children.length > 0) {
+        result.push(...flattenFolders(folder.children, level + 1));
+      }
+    });
+    
+    return result;
+  };
+
+  const availableParentFolders = getAvailableParentFolders();
+  const availableChildrenFolders = getAvailableChildrenFolders();
+  const flatParentFolders = flattenFolders(availableParentFolders);
+  // Don't flatten children folders - we want only the immediate level
+  const flatChildrenFolders = availableChildrenFolders.map(folder => ({ folder, level: 0 }));
+
+  return (
+    <Modal 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title="Create New Folder"
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Name */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Name *
+          </label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => handleInputChange('name', e.target.value)}
+            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+            required
+            disabled={isSubmitting}
+            placeholder="Enter folder name"
+          />
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Description
+          </label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => handleInputChange('description', e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+            disabled={isSubmitting}
+            placeholder="Enter folder description"
+          />
+        </div>
+
+        {/* Parent Folder */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Parent Folder
+          </label>
+          <select
+            value={formData.parentId}
+            onChange={(e) => handleInputChange('parentId', e.target.value)}
+            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+            disabled={isSubmitting}
+          >
+            <option value="">No parent (root folder)</option>
+            {flatParentFolders.map(({ folder, level }) => (
+              <option key={folder.id} value={folder.id}>
+                {'  '.repeat(level)}📁 {folder.name}
+              </option>
+            ))}
+          </select>
+          {availableParentFolders.length === 0 && (
+            <p className="text-sm text-gray-400 mt-1">No folders available as parent</p>
+          )}
+        </div>
+
+        {/* Children Folders - Multi-select */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Children Folders
+          </label>
+          <select
+            value=""
+            onChange={handleChildrenChange}
+            disabled={isSubmitting}
+            multiple
+            size={Math.min(6, flatChildrenFolders.length || 1)}
+            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+          >
+            {flatChildrenFolders.map(({ folder, level }) => (
+              <option 
+                key={folder.id} 
+                value={folder.id}
+                className={formData.childrenIds.includes(folder.id) ? 'bg-cyan-600' : ''}
+              >
+                {'  '.repeat(level)}📁 {folder.name}
+              </option>
+            ))}
+          </select>
+          {availableChildrenFolders.length === 0 && (
+            <p className="text-sm text-gray-400 mt-1">No folders available as children</p>
+          )}
+          <p className="text-sm text-gray-400 mt-1">
+            Click on folders to select/deselect them as children. Hold Ctrl/Cmd for multiple selections.
+          </p>
+        </div>
+
+        {/* Selected Children Display */}
+        {formData.childrenIds.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Selected Children ({formData.childrenIds.length})
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {formData.childrenIds.map(childId => {
+                const folder = flatChildrenFolders.find(({ folder: f }) => f.id === childId)?.folder;
+                return folder ? (
+                  <span
+                    key={childId}
+                    className="inline-flex items-center px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-sm text-purple-400"
+                  >
+                    📁 {folder.name}
+                  </span>
+                ) : null;
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-700">
+          <Button 
+            variant="secondary" 
+            onClick={onClose} 
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={isSubmitting}
+            icon={FolderPlus}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader className="w-4 h-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              'Create Folder'
+            )}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+export default CreateFolderModal;

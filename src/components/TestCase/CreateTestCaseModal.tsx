@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Loader, CheckCircle, Edit, Eye, Clock, XCircle, AlertTriangle, Zap, Target, Shield, Flame } from 'lucide-react';
+import { Plus, Loader, CheckCircle, Edit, Eye, Clock, XCircle, AlertTriangle, Zap, Target, Shield, Flame, Layers } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -19,12 +19,16 @@ import Modal from '../UI/Modal';
 import Button from '../UI/Button';
 import TagSelector from '../UI/TagSelector';
 import FileUpload from '../UI/FileUpload';
-import WysiwygEditor from '../UI/WysiwygEditor';
-import DraggableTestStep from './DraggableTestStep';
-import { useUsers } from '../../hooks/useUsers';
-import { useTags } from '../../hooks/useTags';
+import WysiwygEditorWithAutoUpload from '../UI/WysiwygEditorWithAutoUpload';
+import DraggableTestStepWithAutoUpload from './DraggableTestStepWithAutoUpload';
+import DraggableSharedStep from './DraggableSharedStep';
+import SharedStepSelectorModal from '../SharedStep/SharedStepSelectorModal';
+import SharedStepViewModal from '../SharedStep/SharedStepViewModal';
+import { useUsers } from '../../context/UsersContext';
 import { useAuth } from '../../context/AuthContext';
 import { Tag } from '../../services/tagsApi';
+import { SharedStep } from '../../services/sharedStepsApi';
+import { attachmentsApiService } from '../../services/attachmentsApi';
 
 // Mappings constants
 const TEMPLATES = {
@@ -75,11 +79,23 @@ interface TestStep {
   result: string;
 }
 
+interface TestStepOrSharedStep {
+  type: 'step' | 'shared';
+  id: string;
+  step?: string;
+  result?: string;
+  sharedStep?: SharedStep;
+}
+
 interface CreateTestCaseModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => Promise<void>;
   isSubmitting: boolean;
+  availableTags: Tag[];
+  onCreateTag: (label: string) => Promise<Tag>;
+  tagsLoading: boolean;
+  selectedProject: any;
 }
 
 // Custom Select Component with Icons
@@ -149,11 +165,14 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  isSubmitting
+  isSubmitting,
+  availableTags,
+  onCreateTag,
+  tagsLoading,
+  selectedProject
 }) => {
   const { state: authState } = useAuth();
   const { users, loading: usersLoading } = useUsers();
-  const { tags, createTag } = useTags();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -169,8 +188,21 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
   });
 
   const [testSteps, setTestSteps] = useState<TestStep[]>([]);
+  const [sharedSteps, setSharedSteps] = useState<SharedStep[]>([]);
+  const [stepOrder, setStepOrder] = useState<Array<{ type: 'step' | 'shared'; id: string }>>([]);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploadedAttachments, setUploadedAttachments] = useState<Array<{
+    file: File;
+    key: string;
+    cloudFrontUrl: string;
+    attachmentId?: string;
+  }>>([]);
+
+  // Modal states for shared step selection
+  const [isSharedStepSelectorOpen, setIsSharedStepSelectorOpen] = useState(false);
+  const [isSharedStepViewOpen, setIsSharedStepViewOpen] = useState(false);
+  const [selectedSharedStepForView, setSelectedSharedStepForView] = useState<SharedStep | null>(null);
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -201,13 +233,16 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
         preconditions: '',
         owner: '',
         state: 2,
-        priority: 1,
+        priority: 2,
         testCaseType: 6,
         automationStatus: 1
       });
       setTestSteps([]);
+      setSharedSteps([]);
+      setStepOrder([]);
       setSelectedTags([]);
       setAttachments([]);
+      setUploadedAttachments([]);
     }
   }, [isOpen]);
 
@@ -222,6 +257,7 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
       result: ''
     };
     setTestSteps(prev => [...prev, newStep]);
+    setStepOrder(prev => [...prev, { type: 'step', id: newStep.id }]);
   };
 
   const updateTestStep = (id: string, field: 'step' | 'result', value: string) => {
@@ -232,55 +268,161 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
 
   const removeTestStep = (id: string) => {
     setTestSteps(prev => prev.filter(step => step.id !== id));
+    setStepOrder(prev => prev.filter(item => !(item.type === 'step' && item.id === id)));
+  };
+
+  const addSharedStep = (sharedStep: SharedStep) => {
+    // Check if this shared step is already added
+    const isAlreadyAdded = sharedSteps.some(existing => existing.id === sharedStep.id);
+    if (isAlreadyAdded) {
+      return;
+    }
+    
+    setSharedSteps(prev => [...prev, sharedStep]);
+    setStepOrder(prev => [...prev, { type: 'shared', id: `shared-${sharedStep.id}` }]);
+  };
+
+  const removeSharedStep = (sharedStepId: string) => {
+    setSharedSteps(prev => prev.filter(step => step.id !== sharedStepId));
+    setStepOrder(prev => prev.filter(item => !(item.type === 'shared' && item.id === `shared-${sharedStepId}`)));
+  };
+
+  const viewSharedStep = (sharedStep: SharedStep) => {
+    setSelectedSharedStepForView(sharedStep);
+    setIsSharedStepViewOpen(true);
+  };
+
+  // Combine test steps and shared steps for drag and drop
+  const allSteps: TestStepOrSharedStep[] = stepOrder.map(orderItem => {
+    if (orderItem.type === 'step') {
+      const step = testSteps.find(s => s.id === orderItem.id);
+      return step ? { type: 'step' as const, id: step.id, step: step.step, result: step.result } : null;
+    } else {
+      const sharedStepId = orderItem.id.replace('shared-', '');
+      const sharedStep = sharedSteps.find(s => s.id === sharedStepId);
+      return sharedStep ? { type: 'shared' as const, id: orderItem.id, sharedStep } : null;
+    }
+  }).filter(Boolean) as TestStepOrSharedStep[];
+
+  const handleAttachmentUploaded = (uploadData: any) => {
+    console.log('📎 Attachment uploaded successfully:', uploadData);
+    
+    setUploadedAttachments(prev => [...prev, {
+      file: uploadData.file,
+      key: uploadData.key,
+      cloudFrontUrl: uploadData.cloudFrontUrl,
+      attachmentId: undefined // Will be set when attachment is created via API
+    }]);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      setTestSteps((items) => {
-        const oldIndex = items.findIndex(item => item.id === active.id);
-        const newIndex = items.findIndex(item => item.id === over.id);
-
-        return arrayMove(items, oldIndex, newIndex);
-      });
+      const oldIndex = stepOrder.findIndex(item => item.id === active.id);
+      const newIndex = stepOrder.findIndex(item => item.id === over.id);
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const reorderedOrder = arrayMove(stepOrder, oldIndex, newIndex);
+        setStepOrder(reorderedOrder);
+      }
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Create any new tags before submitting
-    const processedTags = [];
-    for (const tag of selectedTags) {
-      if (tag.id.startsWith('temp-')) {
-        // This is a new tag, create it
+    // STEP 1: Create attachments via API first
+    const createdAttachments: Array<{
+      type: "Attachment";
+      id: string;
+    }> = [];
+    
+    if (uploadedAttachments.length > 0 && authState.user?.id) {
+      console.log('📎 Step 1: Creating', uploadedAttachments.length, 'attachments via API...');
+      
+      for (const uploadedAttachment of uploadedAttachments) {
         try {
-          const newTag = await createTag(tag.label);
-          processedTags.push(newTag);
+          console.log('📎 Creating attachment for:', uploadedAttachment.file.name);
+          
+          const attachmentResponse = await attachmentsApiService.createAttachment({
+            url: uploadedAttachment.cloudFrontUrl,
+            userId: authState.user.id
+          });
+          
+          createdAttachments.push({
+            type: "Attachment",
+            id: `/api/attachments/${attachmentResponse.data.attributes.id}`
+          });
+          
+          console.log('✅ Created attachment with ID:', attachmentResponse.data.attributes.id);
         } catch (error) {
-          console.error('Failed to create tag:', error);
-          // Continue with the temporary tag if creation fails
-          processedTags.push(tag);
+          console.error('❌ Failed to create attachment:', error);
+          throw new Error(`Failed to create attachment for ${uploadedAttachment.file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-      } else {
-        // Existing tag
-        processedTags.push(tag);
+      }
+      
+      console.log('📎 Step 1 & 2 Complete: All attachments created and transformed:', createdAttachments);
+    }
+    
+    // Process stepOrder array - order is simply position in list (1, 2, 3, etc.)
+    const stepResultsRelationships: any[] = [];
+    const sharedStepsRelationships: any[] = [];
+    
+    for (let position = 0; position < stepOrder.length; position++) {
+      const orderItem = stepOrder[position];
+      const order = position + 1; // Position 0 = order 1, position 1 = order 2, etc.
+
+      if (orderItem.type === 'step') {
+        const step = testSteps.find(s => s.id === orderItem.id);
+        if (step) {
+          stepResultsRelationships.push({
+            type: "StepResult",
+            id: step.id, // Will be replaced with actual step result ID after creation
+            meta: {
+              order: order
+            }
+          });
+        }
+      } else if (orderItem.type === 'shared') {
+        const sharedStepId = orderItem.id.replace('shared-', '');
+        const sharedStep = sharedSteps.find(s => s.id === sharedStepId);
+        if (sharedStep) {
+          sharedStepsRelationships.push({
+            type: "SharedStep",
+            id: `/api/shared_steps/${sharedStep.id}`,
+            meta: {
+              order: order
+            }
+          });
+        }
       }
     }
     
     const submitData = {
-      ...formData,
-      testSteps,
-      tags: processedTags,
-      attachments
+      title: formData.title,
+      template: formData.template,
+      description: formData.description,
+      preconditions: formData.preconditions,
+      priority: formData.priority, // Send the numeric value directly
+      testCaseType: formData.testCaseType, // Send the numeric value directly  
+      state: formData.state, // Send the numeric value directly
+      automationStatus: formData.automationStatus,
+      tags: selectedTags,
+      testSteps: testSteps,
+      stepResultsRelationships,
+      sharedStepsRelationships,
+      creatorId: authState.user?.id,
+      createdAttachments
     };
+
+    console.log('📎 MODAL: Passing createdAttachments to hook:', createdAttachments);
 
     await onSubmit(submitData);
   };
 
   const handleCreateTag = async (label: string): Promise<Tag> => {
-    return await createTag(label);
+    return await onCreateTag(label);
   };
 
   return (
@@ -334,11 +476,13 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Description
                 </label>
-                <WysiwygEditor
+                <WysiwygEditorWithAutoUpload
                   value={formData.description}
                   onChange={(value) => handleInputChange('description', value)}
+                  fieldName="description"
                   placeholder="Enter test case description"
                   disabled={isSubmitting}
+                  autoProcessImages={true}
                 />
               </div>
 
@@ -347,11 +491,13 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Preconditions
                 </label>
-                <WysiwygEditor
+                <WysiwygEditorWithAutoUpload
                   value={formData.preconditions}
                   onChange={(value) => handleInputChange('preconditions', value)}
+                  fieldName="precondition"
                   placeholder="Enter preconditions for this test case"
                   disabled={isSubmitting}
+                  autoProcessImages={true}
                 />
               </div>
 
@@ -361,45 +507,72 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
                   <label className="block text-sm font-medium text-gray-300">
                     Steps and Results
                   </label>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    icon={Plus}
-                    onClick={addTestStep}
-                    disabled={isSubmitting}
-                  >
-                    Add Step
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      icon={Layers}
+                      onClick={() => setIsSharedStepSelectorOpen(true)}
+                      disabled={isSubmitting}
+                    >
+                      Add Shared Step
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      icon={Plus}
+                      onClick={addTestStep}
+                      disabled={isSubmitting}
+                    >
+                      Add Step
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="space-y-4">
-                  {testSteps.length > 0 ? (
+                  {allSteps.length > 0 ? (
                     <DndContext
                       sensors={sensors}
                       collisionDetection={closestCenter}
                       onDragEnd={handleDragEnd}
                     >
                       <SortableContext
-                        items={testSteps.map(step => step.id)}
+                        items={allSteps.map(step => step.id)}
                         strategy={verticalListSortingStrategy}
                       >
-                        {testSteps.map((step, index) => (
-                          <DraggableTestStep
-                            key={step.id}
-                            step={step}
-                            index={index}
-                            onUpdate={updateTestStep}
-                            onRemove={removeTestStep}
-                            disabled={isSubmitting}
-                          />
+                        {allSteps.map((item, index) => (
+                          item.type === 'step' ? (
+                            <DraggableTestStepWithAutoUpload
+                              key={item.id}
+                              step={{
+                                id: item.id,
+                                step: item.step!,
+                                result: item.result!
+                              }}
+                              index={index}
+                              onUpdate={updateTestStep}
+                              onRemove={removeTestStep}
+                              disabled={isSubmitting}
+                            />
+                          ) : (
+                            <DraggableSharedStep
+                              key={item.id}
+                              sharedStep={item.sharedStep!}
+                              index={index}
+                              onRemove={removeSharedStep}
+                              onView={viewSharedStep}
+                              disabled={isSubmitting}
+                            />
+                          )
                         ))}
                       </SortableContext>
                     </DndContext>
                   ) : (
                     <div className="text-center py-8 text-gray-400 border-2 border-dashed border-slate-600 rounded-lg">
-                      <p>No test steps added yet.</p>
-                      <p className="text-sm">Click "Add Step" to create your first test step.</p>
+                      <p>No steps added yet.</p>
+                      <p className="text-sm">Add test steps or shared steps to define the test case workflow.</p>
                     </div>
                   )}
                 </div>
@@ -413,6 +586,7 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
                 <FileUpload
                   files={attachments}
                   onFilesChange={setAttachments}
+                  onFileUploaded={handleAttachmentUploaded}
                   disabled={isSubmitting}
                   accept="*/*"
                   multiple={true}
@@ -422,10 +596,10 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
             </div>
           </div>
 
-          {/* Sidebar - 1/4 width - Optimisé en hauteur avec largeurs fixes et padding-left ajouté */}
+          {/* Sidebar - 1/4 width */}
           <div className="w-80 border-l border-slate-700 pl-6 flex flex-col">
             <div className="flex-1 overflow-y-auto">
-              <div className="space-y-4 pl-2 pr-2"> {/* Ajout de padding-left de 0.5rem (pl-2) */}
+              <div className="space-y-4 pl-2 pr-2">
                 {/* Owner */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -454,7 +628,7 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
                   )}
                 </div>
 
-                {/* State avec icônes dans la liste déroulante */}
+                {/* State */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     State
@@ -468,7 +642,7 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
                   />
                 </div>
 
-                {/* Priority avec icônes dans la liste déroulante */}
+                {/* Priority */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Priority
@@ -521,12 +695,12 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Tags
                   </label>
-                  <div className="max-w-full"> {/* Container pour limiter la largeur */}
+                  <div className="max-w-full">
                     <TagSelector
-                      availableTags={tags}
+                      availableTags={availableTags}
                       selectedTags={selectedTags}
                       onTagsChange={setSelectedTags}
-                     onCreateTag={handleCreateTag}
+                      onCreateTag={handleCreateTag}
                       disabled={isSubmitting}
                       placeholder="Search or create tags..."
                     />
@@ -558,9 +732,24 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
               </div>
             </div>
           </div>
-
         </form>
       </div>
+
+      {/* Shared Step Selector Modal */}
+      <SharedStepSelectorModal
+        isOpen={isSharedStepSelectorOpen}
+        onClose={() => setIsSharedStepSelectorOpen(false)}
+        onSelectSharedStep={addSharedStep}
+        projectId={selectedProject?.id || null}
+        disabled={isSubmitting}
+      />
+
+      {/* Shared Step View Modal */}
+      <SharedStepViewModal
+        isOpen={isSharedStepViewOpen}
+        onClose={() => setIsSharedStepViewOpen(false)}
+        sharedStep={selectedSharedStepForView}
+      />
     </Modal>
   );
 };

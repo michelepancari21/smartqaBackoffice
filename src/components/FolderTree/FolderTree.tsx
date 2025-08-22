@@ -5,7 +5,7 @@ import { Folder as FolderType } from '../../services/foldersApi';
 interface FolderNodeProps {
   folder: FolderType;
   selectedFolderId: string | null;
-  onSelectFolder: (folderId: string) => void;
+  onSelectFolder: (folderId: string | null) => void;
   level: number;
   expandedFolders: Set<string>;
   onToggleExpanded: (folderId: string) => void;
@@ -40,7 +40,7 @@ const FolderNode: React.FC<FolderNodeProps> = React.memo(({
   }, [folder.id, folder.name, folder.testCasesCount, onSelectFolder]);
 
   // Utiliser directement le compteur calculé du dossier
-  const testCasesCount = folder.testCasesCount;
+  const testCasesCount = folder.testCasesCount || 0;
 
   return (
     <div>
@@ -78,7 +78,7 @@ const FolderNode: React.FC<FolderNodeProps> = React.memo(({
           <div className="flex-1 min-w-0">
             <div className="flex items-center">
               <span className="truncate text-sm font-medium">{folder.name}</span>
-              {/* TOUJOURS afficher le compteur avec des couleurs distinctes pour debug */}
+              {/* Always display the counter with distinct colors for debugging */}
               <span className={`ml-auto text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium ${
                 testCasesCount > 0 
                   ? 'text-cyan-400 bg-cyan-500/20 border border-cyan-500/30' 
@@ -87,7 +87,7 @@ const FolderNode: React.FC<FolderNodeProps> = React.memo(({
                 {testCasesCount}
               </span>
             </div>
-            {/* Afficher la description uniquement pour le dossier sélectionné */}
+            {/* Show description only for the selected folder */}
             {isSelected && folder.description && (
               <div className="text-xs text-gray-400 mt-1 truncate">
                 {folder.description}
@@ -121,7 +121,7 @@ FolderNode.displayName = 'FolderNode';
 interface FolderTreeProps {
   folders: FolderType[];
   selectedFolderId: string | null;
-  onSelectFolder: (folderId: string) => void;
+  onSelectFolder: (folderId: string | null) => void;
   loading: boolean;
 }
 
@@ -147,7 +147,14 @@ const FolderTree: React.FC<FolderTreeProps> = React.memo(({
 
   const handleSelectFolder = React.useCallback((folderId: string) => {
     console.log('🎯 FolderTree: selecting folder', folderId);
-    onSelectFolder(folderId);
+    // If clicking on the already selected folder, deselect it (pass null)
+    if (selectedFolderId === folderId) {
+      console.log('🚫 FolderTree: deselecting folder', folderId);
+      onSelectFolder(null);
+    } else {
+      console.log('✅ FolderTree: selecting folder', folderId);
+      onSelectFolder(folderId);
+    }
   }, [onSelectFolder]);
 
   // Auto-expand folders that contain the selected folder

@@ -50,6 +50,42 @@ export interface FoldersApiResponse {
   included?: any[];
 }
 
+export interface CreateFolderRequest {
+  data: {
+    type: "Folder";
+    attributes: {
+      name: string;
+      description: string;
+    };
+    relationships: {
+      parent?: {
+        type: "Folder";
+        id: string;
+      };
+      children?: Array<{
+        type: "Folder";
+        id: string;
+      }>;
+      test_cases?: Array<{
+        type: "TestCase";
+        id: string;
+      }>;
+      project: {
+        type: "Project";
+        id: string;
+      };
+      user: {
+        type: "User";
+        id: string;
+      };
+    };
+  };
+}
+
+export interface CreateFolderResponse {
+  data: ApiFolder;
+}
+
 export interface Folder {
   id: string;
   name: string;
@@ -85,6 +121,64 @@ class FoldersApiService {
     return response || this.getDefaultFoldersResponse();
   }
 
+  async createFolder(folderData: {
+    name: string;
+    description: string;
+    projectId: string;
+    parentId?: string;
+    childrenIds: string[];
+    userId: string;
+  }): Promise<CreateFolderResponse> {
+    const requestBody: CreateFolderRequest = {
+      data: {
+        type: "Folder",
+        attributes: {
+          name: folderData.name,
+          description: folderData.description
+        },
+        relationships: {
+          project: {
+            type: "Project",
+            id: `/api/projects/${folderData.projectId}`
+          },
+          user: {
+            type: "User",
+            id: `/api/users/${folderData.userId}`
+          }
+        }
+      }
+    };
+
+    // Add parent relationship if provided
+    if (folderData.parentId) {
+      requestBody.data.relationships.parent = {
+        type: "Folder",
+        id: `/api/folders/${folderData.parentId}`
+      };
+    }
+
+    // Add children relationships - always include as array (empty if no children)
+    requestBody.data.relationships.children = (folderData.childrenIds || []).map(childId => ({
+      type: "Folder",
+      id: `/api/folders/${childId}`
+    }));
+
+    // Note: test_cases relationship is empty for new folders
+    // Test cases can be moved to folders later
+    requestBody.data.relationships.test_cases = [];
+
+    const response = await apiService.authenticatedRequest('/folders', {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response) {
+      throw new Error('No response received from server');
+    }
+
+    return response;
+  }
+
   // Helper method to transform API folder to our internal format
   transformApiFolder(apiFolder: ApiFolder, projectId: string): Folder {
     // Verify the folder belongs to the correct project
@@ -114,9 +208,9 @@ class FoldersApiService {
   }
 
   // Build folder tree from flat list and calculate test cases count including children
-  buildFolderTree(folders: Folder[], testCases: TestCase[] = []): Folder[] {
+  buildFolderTree(folders: Folder[]): Folder[] {
     console.log('🌳 Building folder tree from', folders.length, 'folders');
-    console.log('📊 Folders to process:', folders.map(f => ({ id: f.id, name: f.name, parentId: f.parentId, testCasesCount: f.testCasesCount })));
+    console.log('📊 Folders to process:', folders.map(f => ({ id: f.id, name: f.name, parentId: f.parentId, directTestCasesCount: f.directTestCasesCount })));
     
     // Create a map of all folders with fresh children arrays
     const folderMap = new Map<string, Folder>();
@@ -148,26 +242,23 @@ class FoldersApiService {
       }
     });
 
-    // Test case counts are already set from the extracted data, no need to recalculate
-    console.log('📊 Using pre-calculated test case counts from extracted data');
-
     console.log('🧮 Calculating test cases counts recursively...');
 
     // Calculate total test cases count for each folder (including children) - RECURSIVE
     const calculateTotalTestCases = (folder: Folder): number => {
-      let total = folder.directTestCasesCount || folder.testCasesCount || 0;
+      let total = folder.directTestCasesCount || 0;
       console.log(`   📊 Calculating for "${folder.name}": starting with ${total} direct test cases`);
       
-      // Ajouter récursivement les test cases des enfants
+      // Add recursively the test cases from children
       folder.children.forEach(child => {
         const childTotal = calculateTotalTestCases(child);
         total += childTotal;
         console.log(`   ➕ Adding ${childTotal} from child "${child.name}" to "${folder.name}"`);
       });
       
-      // IMPORTANT: Mettre à jour le compteur du dossier
+      // IMPORTANT: Update the folder counter
       folder.testCasesCount = total;
-      console.log(`   ✅ Final count for "${folder.name}": ${total} test cases (${folder.directTestCasesCount} direct + ${total - folder.directTestCasesCount} from children)`);
+      console.log(`   ✅ Final count for "${folder.name}": ${total} test cases (${folder.directTestCasesCount || 0} direct + ${total - (folder.directTestCasesCount || 0)} from children)`);
       
       return total;
     };
@@ -182,7 +273,7 @@ class FoldersApiService {
     // Log final results for debugging
     const logFolderCounts = (folderList: Folder[], indent = '') => {
       folderList.forEach(folder => {
-        console.log(`${indent}📁 ${folder.name}: ${folder.testCasesCount} total (${folder.directTestCasesCount} direct)`);
+        console.log(`${indent}📁 ${folder.name}: ${folder.testCasesCount} total (${folder.directTestCasesCount || 0} direct)`);
         if (folder.children.length > 0) {
           logFolderCounts(folder.children, indent + '  ');
         }

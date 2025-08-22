@@ -3,3 +3,5 @@ For all designs I ask you to make, have them be beautiful, not cookie cutter. Ma
 By default, this template supports JSX syntax with Tailwind CSS classes, React hooks, and Lucide React for icons. Do not install other packages for UI themes, icons, etc unless absolutely necessary or I request them.
 
 Use icons from lucide-react for logos.
+
+When asked to add a feature, avoid writing over and over again in the same file, instead try to write more but smaller files, so it is easier to maintain.

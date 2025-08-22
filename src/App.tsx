@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
 import { LoadingProvider } from './context/LoadingContext';
+import { UsersProvider } from './context/UsersContext';
 import GlobalLoader from './components/UI/GlobalLoader';
 import { useLoading } from './context/LoadingContext';
 import Layout from './components/Layout/Layout';
@@ -16,6 +17,10 @@ import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
 import TestCases from './pages/TestCases';
 import SharedSteps from './pages/SharedSteps';
+import TestRuns from './pages/TestRuns';
+import TestRunDetails from './pages/TestRunDetails';
+import TestRunsOverview from './pages/TestRunsOverview';
+import TestPlans from './pages/TestPlans';
 
 const AppContent: React.FC = () => {
   const { loading } = useLoading();
@@ -38,8 +43,10 @@ const AppContent: React.FC = () => {
               <Route path="projects" element={<Projects />} />
               <Route path="test-cases" element={<TestCases />} />
               <Route path="shared-steps" element={<SharedSteps />} />
-              <Route path="test-runs" element={<div className="text-white">Test Runs - In Development</div>} />
-              <Route path="test-plans" element={<div className="text-white">Test Plans - In Development</div>} />
+              <Route path="test-runs" element={<TestRuns />} />
+              <Route path="test-runs/:id" element={<TestRunDetails />} />
+              <Route path="test-runs-overview" element={<TestRunsOverview />} />
+              <Route path="test-plans" element={<TestPlans />} />
               <Route path="reports" element={<div className="text-white">Reports - In Development</div>} />
               <Route path="settings" element={<div className="text-white">Settings - In Development</div>} />
             </Route>
@@ -65,11 +72,13 @@ const AppContent: React.FC = () => {
 function App() {
   return (
     <AuthProvider>
-      <AppProvider>
-        <LoadingProvider>
-          <AppContent />
-        </LoadingProvider>
-      </AppProvider>
+      <UsersProvider>
+        <AppProvider>
+          <LoadingProvider>
+            <AppContent />
+          </LoadingProvider>
+        </AppProvider>
+      </UsersProvider>
     </AuthProvider>
   );
 }

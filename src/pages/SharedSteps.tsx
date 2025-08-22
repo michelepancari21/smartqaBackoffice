@@ -5,89 +5,16 @@ import Button from '../components/UI/Button';
 import Modal from '../components/UI/Modal';
 import ConfirmDialog from '../components/UI/ConfirmDialog';
 import CreateSharedStepModal from '../components/SharedStep/CreateSharedStepModal';
+import EditSharedStepModal from '../components/SharedStep/EditSharedStepModal';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useSharedSteps } from '../hooks/useSharedSteps';
-import { SharedStep } from '../services/sharedStepsApi';
+import { SharedStep, sharedStepsApiService } from '../services/sharedStepsApi';
 import toast from 'react-hot-toast';
-
-// Modal component for editing shared steps (simplified version)
-const SharedStepModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: () => void;
-  title: string;
-  sharedStepData: { title: string; description: string };
-  setSharedStepData: (data: { title: string; description: string }) => void;
-  isSubmitting: boolean;
-}> = ({ isOpen, onClose, onSubmit, title, sharedStepData, setSharedStepData, isSubmitting }) => {
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit();
-  };
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSharedStepData({ ...sharedStepData, title: e.target.value });
-  };
-
-  const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setSharedStepData({ ...sharedStepData, description: e.target.value });
-  };
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Title *
-          </label>
-          <input
-            type="text"
-            value={sharedStepData.title}
-            onChange={handleTitleChange}
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
-            required
-            disabled={isSubmitting}
-            autoComplete="off"
-            placeholder="Enter shared step title"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Description *
-          </label>
-          <textarea
-            value={sharedStepData.description}
-            onChange={handleDescriptionChange}
-            rows={4}
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
-            required
-            disabled={isSubmitting}
-            autoComplete="off"
-            placeholder="Enter shared step description"
-          />
-        </div>
-        <div className="flex justify-end space-x-3 pt-4">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Loader className="w-4 h-4 mr-2 animate-spin" />
-                {title.includes('Create') ? 'Creating...' : 'Updating...'}
-              </>
-            ) : (
-              title.includes('Create') ? 'Create' : 'Update'
-            )}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-};
 
 const SharedSteps: React.FC = () => {
   const { getSelectedProject } = useApp();
+  const { state: authState } = useAuth();
   const selectedProject = getSelectedProject();
   
   const { 
@@ -109,10 +36,6 @@ const SharedSteps: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedSharedStep, setSelectedSharedStep] = useState<SharedStep | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [newSharedStep, setNewSharedStep] = useState({
-    title: '',
-    description: ''
-  });
 
   const handleSearch = useCallback(async (term: string) => {
     setCurrentSearchTerm(term);
@@ -140,19 +63,57 @@ const SharedSteps: React.FC = () => {
       return;
     }
 
+    if (!authState.user?.id) {
+      toast.error('User not authenticated');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       
-      // For now, we'll just use the basic data (title and description)
-      // The steps will be handled later when we implement the full shared steps functionality
+      // Handle step results - create them first if they exist
+      let stepResults: Array<{
+        id: string;
+        order: number;
+      }> = [];
+      
+      if (data.testSteps && data.testSteps.length > 0) {
+        console.log('🔄 Creating step results for new shared step...');
+        
+        for (let i = 0; i < data.testSteps.length; i++) {
+          const step = data.testSteps[i];
+          
+          try {
+            const stepResultResponse = await sharedStepsApiService.createStepResult({
+              step: step.step,
+              result: step.result,
+              userId: authState.user.id
+            });
+            
+            stepResults.push({
+              id: stepResultResponse.data.attributes.id.toString(),
+              order: i + 1 // Order starts from 1
+            });
+            
+            console.log(`Created step result ${i + 1}:`, stepResultResponse.data.id);
+          } catch (stepError) {
+            console.error(`Failed to create step result ${i + 1}:`, stepError);
+            throw new Error(`Failed to create step result ${i + 1}: ${stepError instanceof Error ? stepError.message : 'Unknown error'}`);
+          }
+        }
+        
+        console.log('All step results created:', stepResults);
+      }
+      
+      // Create the shared step with step results
       await createSharedStep({
         title: data.title,
-        description: data.description,
-        projectId: selectedProject.id
+        projectId: selectedProject.id,
+        creatorId: authState.user.id,
+        stepResults
       });
       
       setIsCreateModalOpen(false);
-      toast.success('Shared step created successfully');
       
     } catch (error) {
       console.error('Failed to create shared step:', error);
@@ -162,24 +123,101 @@ const SharedSteps: React.FC = () => {
     }
   }, [createSharedStep, selectedProject]);
 
-  const handleEditSharedStep = useCallback(async () => {
-    if (!selectedSharedStep) return;
+  const handleEditSharedStep = useCallback(async (data: any) => {
+    if (!selectedSharedStep || !selectedProject) {
+      toast.error('Missing required data for update');
+      return;
+    }
+
+    if (!authState.user?.id) {
+      toast.error('User not authenticated');
+      return;
+    }
 
     try {
       setIsSubmitting(true);
+      
+      // Handle step results - update existing ones and create new ones
+      let stepResults: Array<{
+        id: string;
+        order: number;
+      }> = [];
+      
+      if (data.testSteps && data.testSteps.length > 0) {
+        console.log('🔄 Processing step results for shared step update...');
+        
+        for (let i = 0; i < data.testSteps.length; i++) {
+          const step = data.testSteps[i];
+          const order = i + 1; // Order starts from 1
+          
+          if (step.originalId) {
+            // Existing step result - update it first, then include in relationships
+            console.log(`🔄 PATCH: Updating existing step result ${step.originalId} with order ${order}`);
+            
+            try {
+              await sharedStepsApiService.updateStepResult(step.originalId, {
+                step: step.step,
+                result: step.result,
+                userId: authState.user.id
+              });
+              
+              console.log(`✅ PATCH: Updated step result ${step.originalId}`);
+            } catch (stepError) {
+              console.error(`❌ PATCH: Failed to update step result ${step.originalId}:`, stepError);
+              throw new Error(`Failed to update step result ${order}: ${stepError instanceof Error ? stepError.message : 'Unknown error'}`);
+            }
+            
+            // Include in relationships
+            stepResults.push({
+              id: step.originalId,
+              order: order
+            });
+            
+            console.log(`✅ Including updated step result ${step.originalId} with order ${order}`);
+          } else {
+            // New step result - use POST to create it
+            console.log(`🔄 POST: Creating new step result ${order}`);
+            
+            try {
+              const stepResultResponse = await sharedStepsApiService.createStepResult({
+                step: step.step,
+                result: step.result,
+                userId: authState.user.id
+              });
+              
+              stepResults.push({
+                id: stepResultResponse.data.attributes.id.toString(),
+                order: order
+              });
+              
+              console.log(`✅ POST: Created new step result ${order}:`, stepResultResponse.data.id);
+            } catch (stepError) {
+              console.error(`❌ POST: Failed to create step result ${order}:`, stepError);
+              throw new Error(`Failed to create step result ${order}: ${stepError instanceof Error ? stepError.message : 'Unknown error'}`);
+            }
+          }
+        }
+        
+        console.log('✅ All step results PATCH/POST processed:', stepResults);
+      }
+      
+      // Update the shared step with step results relationships
       await updateSharedStep(selectedSharedStep.id, {
-        title: newSharedStep.title,
-        description: newSharedStep.description
+        title: data.title,
+        description: data.description || '',
+        stepResults
       });
+      
       setIsEditModalOpen(false);
       setSelectedSharedStep(null);
-      setNewSharedStep({ title: '', description: '' });
+      
     } catch (error) {
-      // Error is already handled in the hook
+      console.error('Failed to update shared step:', error);
+      toast.error('Failed to update shared step');
     } finally {
       setIsSubmitting(false);
     }
-  }, [updateSharedStep, selectedSharedStep, newSharedStep]);
+  }, [updateSharedStep, selectedSharedStep, selectedProject, authState.user?.id]);
 
   const handleDeleteSharedStep = useCallback(async () => {
     if (!selectedSharedStep) return;
@@ -197,10 +235,6 @@ const SharedSteps: React.FC = () => {
 
   const openEditModal = useCallback((sharedStep: SharedStep) => {
     setSelectedSharedStep(sharedStep);
-    setNewSharedStep({
-      title: sharedStep.title,
-      description: sharedStep.description || ''
-    });
     setIsEditModalOpen(true);
   }, []);
 
@@ -224,7 +258,6 @@ const SharedSteps: React.FC = () => {
   const closeEditModal = useCallback(() => {
     setIsEditModalOpen(false);
     setSelectedSharedStep(null);
-    setNewSharedStep({ title: '', description: '' });
   }, []);
 
   if (loading && sharedSteps.length === 0) {
@@ -304,7 +337,7 @@ const SharedSteps: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search shared steps by title/ID (press Enter to search)"
+                placeholder="Search shared steps by title..."
                 value={searchTerm}
                 onChange={handleSearchInputChange}
                 onKeyPress={handleSearchKeyPress}
@@ -330,6 +363,12 @@ const SharedSteps: React.FC = () => {
 
           {/* Shared Steps Table */}
           <Card className="overflow-hidden">
+            {(loading || isSubmitting) && (
+              <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">
+                <Loader className="w-6 h-6 text-cyan-400 animate-spin" />
+              </div>
+            )}
+            
             {loading && (
               <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">
                 <Loader className="w-6 h-6 text-cyan-400 animate-spin" />
@@ -465,14 +504,12 @@ const SharedSteps: React.FC = () => {
         isSubmitting={isSubmitting}
       />
 
-      <SharedStepModal
+      <EditSharedStepModal
         isOpen={isEditModalOpen}
         onClose={closeEditModal}
         onSubmit={handleEditSharedStep}
-        title="Edit Shared Step"
-        sharedStepData={newSharedStep}
-        setSharedStepData={setNewSharedStep}
         isSubmitting={isSubmitting}
+        sharedStep={selectedSharedStep}
       />
 
       <ConfirmDialog

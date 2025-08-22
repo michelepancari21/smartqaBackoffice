@@ -134,8 +134,8 @@ export interface CreateTestCaseRequest {
           };
         }>;
       };
-    }
-  }
+    };
+  };
 }
 
 export interface UpdateTestCaseRequest {
@@ -193,19 +193,31 @@ class TestCasesApiService {
   };
 
   private typeToApi = {
-    'functional': 1,
-    'regression': 2,
-    'smoke': 3,
-    'integration': 4,
-    'performance': 5
+    'other': 1,
+    'acceptance': 2,
+    'accessibility': 3,
+    'compatibility': 4,
+    'destructive': 5,
+    'functional': 6,
+    'performance': 7,
+    'regression': 8,
+    'security': 9,
+    'smoke': 10,
+    'usability': 11
   };
 
   private typeFromApi = {
-    1: 'functional' as const,
-    2: 'regression' as const,
-    3: 'smoke' as const,
-    4: 'integration' as const,
-    5: 'performance' as const
+    1: 'other' as const,
+    2: 'acceptance' as const,
+    3: 'accessibility' as const,
+    4: 'compatibility' as const,
+    5: 'destructive' as const,
+    6: 'functional' as const,
+    7: 'performance' as const,
+    8: 'regression' as const,
+    9: 'security' as const,
+    10: 'smoke' as const,
+    11: 'usability' as const
   };
 
   private statusToApi = {
@@ -242,7 +254,9 @@ class TestCasesApiService {
   }
 
   async getTestCases(page: number = 1, itemsPerPage: number = 30, projectId?: string, folderId?: string): Promise<TestCasesApiResponse> {
-    let url = `/test_cases?page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc`;
+    let url = `/test_cases?page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc&include=tags`;
+    
+    console.log('🌐 API Request URL for getTestCases:', url);
     
     if (projectId) {
       url += `&project=${projectId}`;
@@ -252,7 +266,10 @@ class TestCasesApiService {
       url += `&folder=${folderId}`;
     }
     
+    console.log('🌐 FINAL API Request URL:', url);
+    
     const response = await apiService.authenticatedRequest(url);
+    console.log('🌐 API Response for getTestCases:', response);
     return response || this.getDefaultTestCasesResponse();
   }
 
@@ -260,7 +277,7 @@ class TestCasesApiService {
     const isNumeric = /^\d+$/.test(searchTerm.trim());
     const searchParam = isNumeric ? `id=${encodeURIComponent(searchTerm)}` : `title=${encodeURIComponent(searchTerm)}`;
     
-    let url = `/test_cases?${searchParam}&page=${page}&itemsPerPage=${itemsPerPage}`;
+    let url = `/test_cases?${searchParam}&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc&include=tags`;
     
     if (projectId) {
       url += `&project=${projectId}`;
@@ -270,16 +287,12 @@ class TestCasesApiService {
       url += `&folder=${folderId}`;
     }
     
-    if (include) {
-      url += `&${include}`;
-    }
-    
     const response = await apiService.authenticatedRequest(url);
     return response || this.getDefaultTestCasesResponse();
   }
 
   async filterTestCasesByAutomation(automationStatus: 1 | 2 | 3 | 4 | 5, page: number = 1, itemsPerPage: number = 30, projectId?: string, folderId?: string): Promise<TestCasesApiResponse> {
-    let url = `/test_cases?automation=${automationStatus}&page=${page}&itemsPerPage=${itemsPerPage}`;
+    let url = `/test_cases?automation=${automationStatus}&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc&include=tags`;
     
     if (projectId) {
       url += `&project=${projectId}`;
@@ -294,7 +307,7 @@ class TestCasesApiService {
   }
 
   async filterTestCasesByPriority(priority: number, page: number = 1, itemsPerPage: number = 30, projectId?: string, folderId?: string): Promise<TestCasesApiResponse> {
-    let url = `/test_cases?priority=${priority}&page=${page}&itemsPerPage=${itemsPerPage}`;
+    let url = `/test_cases?priority=${priority}&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc&include=tags`;
     
     if (projectId) {
       url += `&project=${projectId}`;
@@ -309,7 +322,7 @@ class TestCasesApiService {
   }
 
   async filterTestCasesByType(type: number, page: number = 1, itemsPerPage: number = 30, projectId?: string, folderId?: string): Promise<TestCasesApiResponse> {
-    let url = `/test_cases?type=${type}&page=${page}&itemsPerPage=${itemsPerPage}`;
+    let url = `/test_cases?type=${type}&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc&include=tags`;
     
     if (projectId) {
       url += `&project=${projectId}`;
@@ -324,7 +337,7 @@ class TestCasesApiService {
   }
 
   async filterTestCasesByState(state: number, page: number = 1, itemsPerPage: number = 30, projectId?: string, folderId?: string): Promise<TestCasesApiResponse> {
-    let url = `/test_cases?state=${state}&page=${page}&itemsPerPage=${itemsPerPage}`;
+    let url = `/test_cases?state=${state}&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc&include=tags`;
     
     if (projectId) {
       url += `&project=${projectId}`;
@@ -339,7 +352,7 @@ class TestCasesApiService {
   }
   async filterTestCasesByTags(tagIds: string[], page: number = 1, itemsPerPage: number = 30, projectId?: string, folderId?: string): Promise<TestCasesApiResponse> {
     const tagsParam = tagIds.join(',');
-    let url = `/test_cases?tags=${tagsParam}&page=${page}&itemsPerPage=${itemsPerPage}`;
+    let url = `/test_cases?tags=${tagsParam}&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc&include=tags`;
     
     if (projectId) {
       url += `&project=${projectId}`;
@@ -355,13 +368,15 @@ class TestCasesApiService {
 
   async filterTestCasesWithMultipleFilters(filters: {
     automationStatus?: 1 | 2 | 3 | 4 | 5;
-    priority?: 'low' | 'medium' | 'high' | 'critical';
-    type?: 'functional' | 'regression' | 'smoke' | 'integration' | 'performance';
+    priority?: number;
+    type?: number;
+    state?: number;
     tagIds?: string[];
   }, page: number = 1, itemsPerPage: number = 30, projectId?: string, folderId?: string): Promise<TestCasesApiResponse> {
     const params = new URLSearchParams();
     params.set('page', page.toString());
     params.set('itemsPerPage', itemsPerPage.toString());
+    params.set('order[createdAt]', 'desc');
     
     if (projectId) {
       params.set('project', projectId);
@@ -376,18 +391,22 @@ class TestCasesApiService {
     }
     
     if (filters.priority) {
-      const priorityValue = this.priorityToApi[filters.priority];
-      params.set('priority', priorityValue.toString());
+      params.set('priority', filters.priority.toString());
     }
     
     if (filters.type) {
-      const typeValue = this.typeToApi[filters.type];
-      params.set('type', typeValue.toString());
+      params.set('type', filters.type.toString());
+    }
+    
+    if (filters.state) {
+      params.set('state', filters.state.toString());
     }
     
     if (filters.tagIds && filters.tagIds.length > 0) {
       params.set('tags', filters.tagIds.join(','));
     }
+    
+    params.set('include', 'tags');
     
     const url = `/test_cases?${params.toString()}`;
     const response = await apiService.authenticatedRequest(url);
@@ -430,22 +449,50 @@ class TestCasesApiService {
   }
 
   async getTestCase(id: string): Promise<{ data: ApiTestCase }> {
-    return apiService.authenticatedRequest(`/test_cases/${id}`);
+    return apiService.authenticatedRequest(`/test_cases/${id}?include=attachments`);
+  }
+
+  async getTestCaseWithIncludes(id: string): Promise<{ 
+    data: ApiTestCase; 
+    included?: Array<{
+      id: string;
+      type: string;
+      attributes: {
+        id: number;
+        step?: string;
+        result?: string;
+        order: number;
+        title?: string;
+        description?: string;
+        createdAt?: string;
+        updatedAt?: string;
+      };
+    }>;
+  }> {
+    return apiService.authenticatedRequest(`/test_cases/${id}?include=stepResults,sharedSteps,attachments`);
   }
 
   async createTestCase(testCaseData: {
     title: string;
     description: string;
-    priority: 'low' | 'medium' | 'high' | 'critical';
-    testType: 'functional' | 'regression' | 'smoke' | 'integration' | 'performance';
-    status: 'draft' | 'active' | 'deprecated';
+    priority: number;
+    testCaseType: number;
+    state: number;
     automationStatus: 1 | 2 | 3 | 4 | 5;
     estimatedDuration: number;
     tags: Tag[];
     projectId: string;
     folderId?: string;
     creatorId: string;
+    createdAttachments?: Array<{
+      type: "Attachment";
+      id: string;
+    }>;
     stepResults?: Array<{
+      id: string;
+      order: number;
+    }>;
+    sharedStepsForApi?: Array<{
       id: string;
       order: number;
     }>;
@@ -458,9 +505,9 @@ class TestCasesApiService {
         attributes: {
           title: testCaseData.title,
           description: testCaseData.description,
-          priority: this.priorityToApi[testCaseData.priority],
-          type: this.typeToApi[testCaseData.testType],
-          state: this.statusToApi[testCaseData.status],
+          priority: testCaseData.priority, // Use numeric value directly
+          type: testCaseData.testCaseType, // Use numeric value directly
+          state: testCaseData.state, // Use numeric value directly
           automation: testCaseData.automationStatus,
           template: testCaseData.template || 1,
           preconditions: testCaseData.preconditions || ''
@@ -503,6 +550,34 @@ class TestCasesApiService {
       };
     }
 
+    // Add shared_steps relationship if provided
+    if (testCaseData.sharedStepsForApi && testCaseData.sharedStepsForApi.length > 0) {
+      requestBody.data.relationships.shared_steps = {
+        data: testCaseData.sharedStepsForApi.map(sharedStep => ({
+          type: "SharedStep",
+          id: `/api/shared_steps/${sharedStep.id}`,
+          meta: {
+            order: sharedStep.order
+          }
+        }))
+      };
+    }
+    
+
+    // ALWAYS add attachments relationship (required by API)
+    // ALWAYS add attachments relationship - fill with created attachment IDs if available
+    if (testCaseData.createdAttachments && testCaseData.createdAttachments.length > 0) {
+      console.log('📎 API SERVICE: Adding attachments to payload:', testCaseData.createdAttachments);
+      
+      requestBody.data.relationships.attachments = {
+        data: testCaseData.createdAttachments
+      };
+      
+      console.log('📎 API SERVICE: Using pre-formatted attachments for payload:', testCaseData.createdAttachments);
+    }
+    
+    console.log('📎 API SERVICE: Final attachments in payload:', requestBody.data.relationships.attachments);
+
     const response = await apiService.authenticatedRequest('/test_cases', {
       method: 'POST',
       body: JSON.stringify(requestBody),
@@ -532,6 +607,17 @@ class TestCasesApiService {
         order: number;
       };
     }>;
+    sharedStepsRelationships?: Array<{
+      type: string;
+      id: string;
+      meta: {
+        order: number;
+      };
+    }>;
+    createdAttachments?: Array<{
+      type: string;
+      id: string;
+    }>;
   }): Promise<UpdateTestCaseResponse> {
     const requestBody: UpdateTestCaseRequest = {
       data: {
@@ -544,11 +630,13 @@ class TestCasesApiService {
           state: this.statusToApi[testCaseData.status],
           automation: testCaseData.automationStatus,
           template: testCaseData.template,
-          preconditions: testCaseData.preconditions
+          preconditions: testCaseData.preconditions,
         }
       }
     };
 
+    console.log('________________');
+    console.log(testCaseData.createdAttachments);
     // Initialize relationships object
     requestBody.data.relationships = {};
     
@@ -562,6 +650,20 @@ class TestCasesApiService {
     if (testCaseData.stepResultsRelationships && testCaseData.stepResultsRelationships.length > 0) {
       requestBody.data.relationships.step_results = {
         data: testCaseData.stepResultsRelationships
+      };
+    }
+    
+    // Add shared_steps relationship if provided
+    if (testCaseData.sharedStepsRelationships && testCaseData.sharedStepsRelationships.length > 0) {
+      requestBody.data.relationships.shared_steps = {
+        data: testCaseData.sharedStepsRelationships
+      };
+    }
+
+    // Add attachments relationship if provided
+    if (testCaseData.createdAttachments && testCaseData.createdAttachments.length > 0) {
+      requestBody.data.relationships.attachments = {
+        data: testCaseData.createdAttachments
       };
     }
 
@@ -599,7 +701,7 @@ class TestCasesApiService {
           user: {
             data: {
               type: "User",
-              id: stepData.userId
+              id: `/api/users/${stepData.userId}`
             }
           }
         }
@@ -628,47 +730,72 @@ class TestCasesApiService {
   }
 
   // Helper method to transform API test case to our internal format
-  async transformApiTestCase(apiTestCase: ApiTestCase, included?: Array<any>) {
+  transformApiTestCase(apiTestCase: ApiTestCase, included?: Array<any>) {
+    console.log('🔍 DEBUG: Transforming test case:', apiTestCase.attributes.id);
+    console.log('🔍 DEBUG: API test case relationships:', apiTestCase.relationships);
+    console.log('🔍 DEBUG: API test case attributes:', apiTestCase.attributes);
+    console.log('🔍 DEBUG: Included data length:', included?.length || 0);
+    
     // Extraire l'ID du projet depuis l'URL de l'API
     const projectId = apiTestCase.relationships.project.data.id.split('/').pop() || '';
     const folderId = apiTestCase.relationships.folder?.data?.id?.split('/').pop();
     
     console.log('🔄 Transforming test case:', apiTestCase.attributes.id, 'folderId from API:', folderId);
     
-    // Extract tags from relationships and fetch actual labels
+    // Extract tags from relationships and resolve them using included data
     let tags: string[] = [];
-    if (apiTestCase.relationships.tags?.data) {
-      // Extract tag IRIs and fetch actual tag data
-      const tagIris = apiTestCase.relationships.tags.data.map(tag => tag.id);
-      console.log('🏷️ Fetching tag details for IRIs:', tagIris);
+    
+    if (apiTestCase.relationships.tags?.data && included) {
+      console.log('🏷️ Found tag relationships:', apiTestCase.relationships.tags.data);
+      console.log('🏷️ Available included data types:', included.map(item => item.type));
       
-      // Fetch tag details for each IRI
-      try {
-        const tagPromises = tagIris.map(async (tagIri) => {
-          try {
-            const tagResponse = await apiService.authenticatedRequest(tagIri.replace('/api', ''));
-            return tagResponse.data.attributes.label;
-          } catch (error) {
-            console.error('Failed to fetch tag:', tagIri, error);
-            return null;
-          }
-        });
+      // Extract tag IDs from relationships
+      const tagIds = apiTestCase.relationships.tags.data.map(tagRef => {
+        // Extract ID from URL format like "/api/tags/123"
+        return tagRef.id.split('/').pop();
+      });
+      
+      console.log('🏷️ Extracted tag IDs:', tagIds);
+      
+      // Find corresponding tag labels in included data
+      tags = tagIds.map(tagId => {
+        const tagData = included.find(item => 
+          item.type === 'Tag' && item.attributes.id.toString() === tagId
+        );
         
-        const tagLabels = await Promise.all(tagPromises);
-        tags = tagLabels.filter(label => label !== null);
-        console.log('✅ Fetched tag labels:', tags);
-      } catch (error) {
-        console.error('❌ Failed to fetch tag labels:', error);
-        tags = [];
-      }
-    } else if (apiTestCase.attributes.tags) {
-      // If tags are in attributes, use them directly
-      tags = Array.isArray(apiTestCase.attributes.tags) ? apiTestCase.attributes.tags : [];
+        if (tagData) {
+          console.log('🏷️ Found tag data for ID', tagId, ':', tagData.attributes.label);
+          return tagData.attributes.label;
+        } else {
+          console.warn('🏷️ Tag data not found for ID:', tagId);
+          return `Tag ${tagId}`;
+        }
+      }).filter(Boolean);
+    } else if (apiTestCase.relationships.tags?.data && !included) {
+      console.log('🏷️ Found tag relationships but no included data');
+      // Try to extract tag IDs at least
+      const tagIds = apiTestCase.relationships.tags.data.map(tagRef => {
+        return tagRef.id.split('/').pop();
+      });
+      tags = tagIds.map(id => `Tag ${id}`);
+    } else if (Array.isArray(apiTestCase.attributes.tags)) {
+      // Fallback: use tags from attributes if available
+      tags = apiTestCase.attributes.tags;
+      console.log('🏷️ Using tags from attributes:', tags);
+    } else {
+      console.log('🏷️ No tags found for test case:', apiTestCase.attributes.id);
     }
+    
+    console.log('🏷️ FINAL EXTRACTED TAGS:', tags);
     
     // Extract step result IDs from relationships
     const stepResults = apiTestCase.relationships.stepResults?.data?.map(stepResult => 
       stepResult.id.split('/').pop() || stepResult.id
+    ) || [];
+    
+    // Extract shared step IDs from relationships
+    const sharedStepIds = apiTestCase.relationships.sharedSteps?.data?.map(sharedStep => 
+      sharedStep.id.split('/').pop() || sharedStep.id
     ) || [];
     
     const transformed = {
@@ -682,16 +809,16 @@ class TestCasesApiService {
       type: this.typeFromApi[apiTestCase.attributes.type as keyof typeof this.typeFromApi] || 'functional',
       status: this.statusFromApi[apiTestCase.attributes.state as keyof typeof this.statusFromApi] || 'draft',
       automationStatus: apiTestCase.attributes.automation, // Utilise directement le champ automation de l'API
-      steps: [], // Steps would need to be fetched separately or included in the response
-      sharedSteps: [], // Shared steps would need to be fetched separately
+      steps: [], // Steps are handled via stepResults
       stepResults: stepResults, // Add step result IDs
+      sharedSteps: sharedStepIds, // Add shared step IDs from relationships
       tags: tags,
       createdAt: new Date(apiTestCase.attributes.createdAt),
       updatedAt: new Date(apiTestCase.attributes.updatedAt),
       estimatedDuration: apiTestCase.attributes.estimatedDuration || 5
     };
     
-    console.log('✅ Transformed test case:', transformed.id, 'folderId:', transformed.folderId);
+    console.log('✅ Transformed test case:', transformed.id, 'with tags:', transformed.tags);
     return transformed;
   }
 }

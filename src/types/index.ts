@@ -25,6 +25,7 @@ export interface TestCase {
   steps: TestStep[];
   sharedSteps: string[];
   stepResults?: string[]; // Add stepResults field for API step result IDs
+  sharedSteps: string[]; // Add sharedSteps field for API shared step IDs
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -173,3 +174,18 @@ export const AUTOMATION_STATUS_LABELS = {
 export const getAutomationStatusLabel = (status: 1 | 2 | 3 | 4 | 5): string => {
   return AUTOMATION_STATUS_LABELS[status];
 };
+
+// Test execution results mapping
+export const TEST_RESULTS = {
+  1: 'Passed',
+  2: 'Failed', 
+  3: 'Blocked',
+  4: 'Retest',
+  5: 'Skipped',
+  6: 'Untested',
+  7: 'In Progress',
+  8: 'Unknown'
+} as const;
+
+export type TestResultId = keyof typeof TEST_RESULTS;
+export type TestResultValue = typeof TEST_RESULTS[TestResultId];

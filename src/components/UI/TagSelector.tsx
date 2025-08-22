@@ -26,14 +26,14 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Filter available tags based on search term and exclude already selected
-  const filteredTags = availableTags.filter(tag => 
+  const filteredTags = (availableTags || []).filter(tag => 
     tag.label.toLowerCase().includes(searchTerm.toLowerCase()) &&
     !selectedTags.some(selected => selected.id === tag.id)
   );
 
   // Check if search term would create a new tag
   const canCreateNew = searchTerm.trim() && 
-    !availableTags.some(tag => tag.label.toLowerCase() === searchTerm.toLowerCase()) &&
+    !(availableTags || []).some(tag => tag.label.toLowerCase() === searchTerm.toLowerCase()) &&
     !selectedTags.some(tag => tag.label.toLowerCase() === searchTerm.toLowerCase());
 
   const handleTagSelect = (tag: Tag) => {
@@ -167,17 +167,6 @@ const TagSelector: React.FC<TagSelectorProps> = ({
             </button>
           ))}
 
-          {filteredTags.map((tag) => (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => handleTagSelect(tag)}
-              className="w-full px-4 py-2 text-left text-white hover:bg-slate-700 transition-colors flex items-center"
-            >
-              <TagIcon className="w-4 h-4 mr-2 text-gray-400" />
-              {tag.label}
-            </button>
-          ))}
 
           {/* Create new tag option */}
           {canCreateNew && (

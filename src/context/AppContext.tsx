@@ -1,11 +1,15 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect, useRef } from 'react';
 import { Project, TestCase, TestExecution, TestPlan, SharedStep } from '../types';
-import { mockTestCases, mockTestExecutions, mockTestPlans, mockSharedSteps } from '../data/mockData';
+import { mockTestCases, mockTestExecutions, mockSharedSteps } from '../data/mockData';
 import { projectsApiService } from '../services/projectsApi';
+import { tagsApiService, Tag } from '../services/tagsApi';
+import { configurationsApiService, Configuration } from '../services/configurationsApi';
 import { useAuth } from './AuthContext';
 
 interface AppState {
   projects: Project[];
+  tags: Tag[];
+  configurations: Configuration[];
   testCases: TestCase[];
   testExecutions: TestExecution[];
   testPlans: TestPlan[];
@@ -13,16 +17,24 @@ interface AppState {
   currentProject: Project | null;
   selectedProjectId: string | null; // Pour le filtrage
   isLoadingProjects: boolean;
+  isLoadingTags: boolean;
+  isLoadingConfigurations: boolean;
 }
 
 type AppAction =
   | { type: 'SET_PROJECTS'; payload: Project[] }
   | { type: 'SET_LOADING_PROJECTS'; payload: boolean }
+  | { type: 'SET_TAGS'; payload: Tag[] }
+  | { type: 'SET_LOADING_TAGS'; payload: boolean }
+  | { type: 'SET_CONFIGURATIONS'; payload: Configuration[] }
+  | { type: 'SET_LOADING_CONFIGURATIONS'; payload: boolean }
   | { type: 'ADD_PROJECT'; payload: Project }
   | { type: 'UPDATE_PROJECT'; payload: Project }
   | { type: 'DELETE_PROJECT'; payload: string }
   | { type: 'SET_CURRENT_PROJECT'; payload: Project | null }
   | { type: 'SET_SELECTED_PROJECT_ID'; payload: string | null }
+  | { type: 'ADD_TAG'; payload: Tag }
+  | { type: 'ADD_CONFIGURATION'; payload: Configuration }
   | { type: 'ADD_TEST_CASE'; payload: TestCase }
   | { type: 'UPDATE_TEST_CASE'; payload: TestCase }
   | { type: 'DELETE_TEST_CASE'; payload: string }
@@ -58,13 +70,17 @@ const setStoredSelectedProjectId = (projectId: string | null): void => {
 
 const initialState: AppState = {
   projects: [],
+  tags: [],
+  configurations: [],
   testCases: mockTestCases,
   testExecutions: mockTestExecutions,
-  testPlans: mockTestPlans,
+  testPlans: [],
   sharedSteps: mockSharedSteps,
   currentProject: null,
   selectedProjectId: getStoredSelectedProjectId(),
-  isLoadingProjects: false
+  isLoadingProjects: false,
+  isLoadingTags: false,
+  isLoadingConfigurations: false
 };
 
 const appReducer = (state: AppState, action: AppAction): AppState => {
@@ -73,8 +89,20 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, projects: action.payload };
     case 'SET_LOADING_PROJECTS':
       return { ...state, isLoadingProjects: action.payload };
+    case 'SET_TAGS':
+      return { ...state, tags: action.payload };
+    case 'SET_LOADING_TAGS':
+      return { ...state, isLoadingTags: action.payload };
+    case 'SET_CONFIGURATIONS':
+      return { ...state, configurations: action.payload };
+    case 'SET_LOADING_CONFIGURATIONS':
+      return { ...state, isLoadingConfigurations: action.payload };
     case 'ADD_PROJECT':
       return { ...state, projects: [...state.projects, action.payload] };
+    case 'ADD_TAG':
+      return { ...state, tags: [...state.tags, action.payload] };
+    case 'ADD_CONFIGURATION':
+      return { ...state, configurations: [...state.configurations, action.payload] };
     case 'UPDATE_PROJECT':
       return {
         ...state,
@@ -135,9 +163,13 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         projects: [],
+        tags: [],
+        configurations: [],
         selectedProjectId: null,
         currentProject: null,
-        isLoadingProjects: false
+        isLoadingProjects: false,
+        isLoadingTags: false,
+        isLoadingConfigurations: false
       };
     default:
       return state;
@@ -152,6 +184,10 @@ const AppContext = createContext<{
   getFilteredTestPlans: () => TestPlan[];
   getSelectedProject: () => Project | null;
   loadProjects: () => Promise<void>;
+  loadTags: () => Promise<void>;
+  loadConfigurations: () => Promise<void>;
+  createTag: (label: string) => Promise<Tag>;
+  createConfiguration: (label: string) => Promise<Configuration>;
 } | null>(null);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -159,6 +195,68 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const { state: authState } = useAuth();
   const loadingRef = useRef(false);
   const hasLoadedRef = useRef(false);
+
+  // Load tags from API
+  const loadTags = async () => {
+    if (!authState.isAuthenticated || state.isLoadingTags) {
+      return;
+    }
+
+    try {
+      dispatch({ type: 'SET_LOADING_TAGS', payload: true });
+      
+      const response = await tagsApiService.getTags();
+      const transformedTags = response.data.map(apiTag => 
+        tagsApiService.transformApiTag(apiTag)
+      );
+      
+      dispatch({ type: 'SET_TAGS', payload: transformedTags });
+      
+    } catch (error) {
+      console.error('Failed to load tags:', error);
+    } finally {
+      dispatch({ type: 'SET_LOADING_TAGS', payload: false });
+    }
+  };
+
+  // Load configurations from API
+  const loadConfigurations = async () => {
+    if (!authState.isAuthenticated || state.isLoadingConfigurations) {
+      return;
+    }
+
+    try {
+      dispatch({ type: 'SET_LOADING_CONFIGURATIONS', payload: true });
+      
+      const response = await configurationsApiService.getConfigurations();
+      const transformedConfigurations = response.data.map(apiConfig => 
+        configurationsApiService.transformApiConfiguration(apiConfig)
+      );
+      
+      dispatch({ type: 'SET_CONFIGURATIONS', payload: transformedConfigurations });
+      
+    } catch (error) {
+      console.error('Failed to load configurations:', error);
+    } finally {
+      dispatch({ type: 'SET_LOADING_CONFIGURATIONS', payload: false });
+    }
+  };
+
+  // Create tag and add to context
+  const createTag = async (label: string): Promise<Tag> => {
+    const response = await tagsApiService.createTag(label);
+    const newTag = tagsApiService.transformApiTag(response.data);
+    dispatch({ type: 'ADD_TAG', payload: newTag });
+    return newTag;
+  };
+
+  // Create configuration and add to context
+  const createConfiguration = async (label: string): Promise<Configuration> => {
+    const response = await configurationsApiService.createConfiguration(label);
+    const newConfiguration = configurationsApiService.transformApiConfiguration(response.data);
+    dispatch({ type: 'ADD_CONFIGURATION', payload: newConfiguration });
+    return newConfiguration;
+  };
 
   // Load projects from API
   const loadProjects = async (force: boolean = false) => {
@@ -230,6 +328,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // User is authenticated, load projects only if not already loaded
       if (!hasLoadedRef.current && !loadingRef.current) {
         loadProjects();
+        loadTags();
+        loadConfigurations();
       }
     } else {
       // User is not authenticated, clear data
@@ -247,7 +347,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       getFilteredTestExecutions,
       getFilteredTestPlans,
       getSelectedProject,
-      loadProjects
+      loadProjects,
+      loadTags,
+      loadConfigurations,
+      createTag,
+      createConfiguration
     }}>
       {children}
     </AppContext.Provider>

@@ -34,6 +34,10 @@ class ApiService {
   private baseURL: string;
 
   constructor() {
+    if (!API_BASE_URL || typeof API_BASE_URL !== 'string' || API_BASE_URL.trim() === '') {
+      console.error('VITE_API_BASE_URL is not defined or is empty. Please set it in your .env file.');
+      throw new Error('API_BASE_URL is not configured. Please check your .env file.');
+    }
     this.baseURL = API_BASE_URL;
   }
 

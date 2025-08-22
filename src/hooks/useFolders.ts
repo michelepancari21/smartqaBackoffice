@@ -35,6 +35,7 @@ export const useFolders = (projectId?: string | null) => {
       setError(null);
       
       console.log('📂 Fetching folder details and updating with test case counts');
+      console.log('🔍 SEARCH_DEBUG: useFolders updateFoldersFromTestCases request made');
       const response = await foldersApiService.getFolders(targetProjectId);
       
       console.log('📂 Folders API response:', response);
@@ -64,34 +65,29 @@ export const useFolders = (projectId?: string | null) => {
         
         const transformed = foldersApiService.transformApiFolder(apiFolder, targetProjectId);
         
-        // Find matching extracted folder to get test case count
-        const extractedFolder = extractedFolders.find(ef => ef.id === transformed.id);
-        console.log('📊 Matching folder:', transformed.id, 'with extracted:', extractedFolder);
-        if (extractedFolder) {
-          transformed.testCasesCount = extractedFolder.testCasesCount;
-          transformed.directTestCasesCount = extractedFolder.testCasesCount;
-          console.log('📊 Set count for folder', transformed.name, ':', extractedFolder.testCasesCount);
-        } else {
-          console.log('⚠️ No test cases found for folder:', transformed.name, '(ID:', transformed.id, ')');
-          transformed.testCasesCount = 0;
-          transformed.directTestCasesCount = 0;
-        }
+        // Initialize counts to 0 - will be calculated properly in buildFolderTree
+        transformed.testCasesCount = 0;
+        transformed.directTestCasesCount = 0;
         
         transformedFolders.push(transformed);
       }
       
       console.log('✅ Transformed', transformedFolders.length, 'folders');
       
-      // Also check if there are extracted folders that don't exist in API response
+      // Calculate test case counts for each folder from extracted data
+      console.log('📊 Calculating test case counts from extracted data...');
       extractedFolders.forEach(extracted => {
-        const found = transformedFolders.find(tf => tf.id === extracted.id);
-        if (!found) {
+        const folder = transformedFolders.find(tf => tf.id === extracted.id);
+        if (folder) {
+          folder.directTestCasesCount = extracted.testCasesCount;
+          console.log('📊 Set direct count for folder', folder.name, ':', extracted.testCasesCount);
+        } else {
           console.log('⚠️ Extracted folder not found in API:', extracted);
         }
       });
       
-      // Build the folder tree (counts already set above)
-      const tree = foldersApiService.buildFolderTree(transformedFolders, []);
+      // Build the folder tree and calculate total counts (including children)
+      const tree = foldersApiService.buildFolderTree(transformedFolders);
       
       console.log('🌳 Built folder tree:', tree);
       console.log('🌳 Tree has', tree.length, 'root folders');
@@ -106,12 +102,18 @@ export const useFolders = (projectId?: string | null) => {
       // Auto-select the first folder SEULEMENT si aucun dossier n'est sélectionné OU si le projet a changé
       const projectChanged = previousProjectId.current !== targetProjectId;
       
-      if ((!selectedFolderId || projectChanged) && tree.length > 0) {
-        const firstFolder = foldersApiService.getFirstFolder(tree);
-        if (firstFolder) {
-          console.log('🎯 Auto-selecting first folder:', firstFolder.name, 'ID:', firstFolder.id);
-          setSelectedFolderId(firstFolder.id);
-        }
+      // Don't auto-select folder if coming from dashboard with filters
+      const hasNavigationState = window.location.pathname === '/test-cases' && 
+                                 window.history.state && 
+                                 window.history.state.applyFilter;
+      
+      // NEVER auto-select folders - always start with no folder selected
+      if (projectChanged) {
+        console.log('🚫 Project changed - clearing folder selection to show all test cases');
+        setSelectedFolderId(null);
+      } else if (hasNavigationState) {
+        console.log('🚫 Skipping auto-folder selection due to dashboard navigation');
+        setSelectedFolderId(null);
       } else if (tree.length === 0) {
         console.log('⚠️ No folders in tree, clearing selection');
         setSelectedFolderId(null);
@@ -169,8 +171,8 @@ export const useFolders = (projectId?: string | null) => {
     console.log('⏳ Waiting for test cases to provide folder data...');
   }, [projectId, selectedFolderId]);
 
-  const selectFolder = useCallback((folderId: string) => {
-    console.log('👆 Manually selecting folder ID:', folderId);
+  const selectFolder = useCallback((folderId: string | null) => {
+    console.log('👆 Manually selecting folder ID:', folderId || 'none (deselected)');
     setSelectedFolderId(folderId);
   }, []);
 
@@ -215,19 +217,9 @@ export const useFolders = (projectId?: string | null) => {
           setFolderTree(cached.tree);
           setLoading(false);
           
-          // Auto-select first folder if none selected
-          if (!selectedFolderId && cached.tree.length > 0) {
-            const firstFolder = foldersApiService.getFirstFolder(cached.tree);
-            if (firstFolder) {
-              console.log('🎯 Auto-selecting first folder from cache:', firstFolder.name);
-              setSelectedFolderId(firstFolder.id);
-            }
-          }
+          // NEVER auto-select folders from cache
+          console.log('✅ Using cached folders without auto-selecting any folder');
         }
-      } else {
-        // Charger les dossiers seulement si pas de cache
-        console.log('🚀 Loading folders for project:', projectId, '(no cache available)');
-        fetchFolders(projectId);
       }
     } else {
       console.log('🚫 No project ID, clearing all folder data');

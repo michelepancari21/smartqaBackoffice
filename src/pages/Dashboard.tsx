@@ -14,14 +14,18 @@ import {
   MoreHorizontal,
   Info
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
+import ClosedRunsCaseResultsStackedChart from '../components/Charts/ClosedRunsCaseResultsStackedChart';
 import { useApp } from '../context/AppContext';
 import { useDashboardData } from '../hooks/useDashboardData';
-import { TEST_CASE_TYPES } from '../types';
+import { TEST_CASE_TYPES, TEST_RESULTS, TestResultId } from '../types';
 
-const Dashboard: React.FC = () => {
+// Only use dashboard data hook on Dashboard page
+export default function Dashboard() {
+  const navigate = useNavigate();
   const { getSelectedProject, state } = useApp();
   const selectedProject = getSelectedProject();
   
@@ -37,17 +41,17 @@ const Dashboard: React.FC = () => {
   // Helper function to get colors for different test case types
   const getTypeColor = (typeId: number): string => {
     const colors = {
-      1: '#8B5CF6', // Other - Purple
-      2: '#10B981', // Acceptance - Green
-      3: '#06B6D4', // Accessibility - Cyan
+      1: '#10B981', // Other - Green
+      2: '#10B981', // Acceptance - Emerald
+      3: '#8B5CF6', // Accessibility - Purple
       4: '#F59E0B', // Compatibility - Amber
       5: '#EF4444', // Destructive - Red
-      6: '#10B981', // Functional - Green
+      6: '#06B6D4', // Functional - Cyan
       7: '#F97316', // Performance - Orange
-      8: '#8B5CF6', // Regression - Purple
-      9: '#DC2626', // Security - Red
-      10: '#FBBF24', // Smoke & Sanity - Yellow
-      11: '#06B6D4', // Usability - Cyan
+      8: '#84CC16', // Regression - Lime
+      9: '#EC4899', // Security - Pink
+      10: '#6366F1', // Smoke & Sanity - Indigo
+      11: '#14B8A6', // Usability - Teal
     };
     return colors[typeId as keyof typeof colors] || '#6B7280';
   };
@@ -77,51 +81,51 @@ const Dashboard: React.FC = () => {
   }
 
   // Prepare data for Active Test Runs (pie chart)
+  // Show all result types in pie chart
   const activeTestRunsData = [
-    { name: 'Passed', value: dashboardData.actualPassed || 0, color: '#10B981' },
-    { name: 'Failed', value: dashboardData.actualFailed || 0, color: '#EF4444' },
-    { name: 'Blocked', value: dashboardData.actualBlocked || 0, color: '#8B5CF6' },
-  ].filter(item => item.value > 0);
+    { name: 'Passed', value: dashboardData.actualPassed, color: '#10B981' },
+    { name: 'Failed', value: dashboardData.actualFailed, color: '#EF4444' },
+    { name: 'Blocked', value: dashboardData.actualBlocked, color: '#F59E0B' },
+    { name: 'Retest', value: dashboardData.actualRetest, color: '#F97316' },
+    { name: 'Skipped', value: dashboardData.actualSkipped, color: '#8B5CF6' },
+    { name: 'Untested', value: dashboardData.actualUntested, color: '#6B7280' },
+    { name: 'In Progress', value: dashboardData.actualInProgress, color: '#3B82F6' },
+    { name: 'Unknown', value: dashboardData.actualUnknown, color: '#4B5563' }
+  ]; // Don't filter out zero values - show all result types
+  
+  // Total test cases = all test cases in active test runs (regardless of result)
+  const totalActiveTestCases = dashboardData.totalTestCasesInActiveRuns || 0;
+  
+  console.log('📊 🎯 DASHBOARD PIE CHART DEBUG:');
+  console.log('📊 🎯 Raw dashboard data values:');
+  console.log('📊 🎯   - actualPassed:', dashboardData.actualPassed, 'type:', typeof dashboardData.actualPassed);
+  console.log('📊 🎯   - actualFailed:', dashboardData.actualFailed, 'type:', typeof dashboardData.actualFailed);
+  console.log('📊 🎯   - actualBlocked:', dashboardData.actualBlocked, 'type:', typeof dashboardData.actualBlocked);
+  console.log('📊 🎯 Calculated totalActiveTestCases:', totalActiveTestCases);
+  console.log('📊 🎯 Pie chart data after filtering:', activeTestRunsData);
+  console.log('📊 🎯 Should show pie chart?', totalActiveTestCases > 0);
+  console.log('📊 🎯 Pie chart condition check:', {
+    totalActiveTestCases,
+    isGreaterThanZero: totalActiveTestCases > 0,
+    hasDataItems: activeTestRunsData.length > 0
+  });
 
   // Helper function to calculate percentages that always add up to 100%
   const calculatePercentages = (values: number[], total: number): number[] => {
     if (total === 0) return values.map(() => 0);
     
-    // Calculate exact percentages
-    const exactPercentages = values.map(value => (value / total) * 100);
-    
-    // Get integer parts and remainders
-    const integerParts = exactPercentages.map(p => Math.floor(p));
-    const remainders = exactPercentages.map((p, i) => ({ index: i, remainder: p - integerParts[i] }));
-    
-    // Sort by remainder (largest first)
-    remainders.sort((a, b) => b.remainder - a.remainder);
-    
-    // Calculate how many percentage points we need to distribute
-    const totalInteger = integerParts.reduce((sum, p) => sum + p, 0);
-    const pointsToDistribute = 100 - totalInteger;
-    
-    // Distribute the remaining points to items with largest remainders
-    const finalPercentages = [...integerParts];
-    for (let i = 0; i < pointsToDistribute && i < remainders.length; i++) {
-      finalPercentages[remainders[i].index]++;
-    }
-    
-    return finalPercentages;
+    // Calculate exact percentages and round to nearest integer
+    return values.map(value => Math.round((value / total) * 100));
   };
 
   // Calculate corrected percentages for active test runs
-  const totalActiveTestCases = activeTestRunsData.reduce((sum, item) => sum + item.value, 0);
   const activeTestRunsPercentages = calculatePercentages(
     activeTestRunsData.map(item => item.value),
-    totalActiveTestCases
+    totalActiveTestCases || 1 // Prevent division by zero
   );
 
   // Prepare data for Closed Test Runs (line chart)
-  const closedTestRunsLineData = dashboardData.closedTestRunsData.map(item => ({
-    month: item.month,
-    value: item.total
-  }));
+  const closedTestRunsLineData = dashboardData.closedTestRunsLineData || [];
 
   // Prepare data for Results from Closed Test Runs (bar chart)
   const resultsFromClosedData = dashboardData.closedTestRunsData.map(item => ({
@@ -133,11 +137,14 @@ const Dashboard: React.FC = () => {
 
   // Prepare data for Type of Test Cases (pie chart)
   const typeOfTestCasesData = Object.entries(dashboardData.testTypeDistribution || {})
-    .map(([typeId, count]) => ({
-      name: TEST_CASE_TYPES[parseInt(typeId) as keyof typeof TEST_CASE_TYPES],
-      value: count,
-      color: getTypeColor(parseInt(typeId))
-    }))
+    .map(([typeId, count]) => {
+      const typeKey = parseInt(typeId) as keyof typeof TEST_CASE_TYPES;
+      return {
+        name: TEST_CASE_TYPES[typeKey] || `Type ${typeId}`,
+        value: count,
+        color: getTypeColor(parseInt(typeId))
+      };
+    })
     .filter(item => item.value > 0);
 
   // Calculate corrected percentages for type of test cases
@@ -146,59 +153,64 @@ const Dashboard: React.FC = () => {
     dashboardData.totalTestCases
   );
 
-  console.log('🎨 Type of test cases data:', typeOfTestCasesData);
-  console.log('🎨 Dashboard test type distribution:', dashboardData.testTypeDistribution);
+  // Handler for pie chart click navigation
+  const handleActiveTestRunsClick = (data: any) => {
+    if (!selectedProject) {
+      console.warn('No project selected, cannot navigate to test runs overview');
+      return;
+    }
 
-  // Generate trend data based on real test type distribution
-  const trendOfTestCasesData = [];
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  
-  const currentFunctional = dashboardData.testTypeDistribution?.functional || 0;
-  const currentRegression = dashboardData.testTypeDistribution?.regression || 0;
-  const currentSmoke = dashboardData.testTypeDistribution?.smoke || 0;
-  const currentIntegration = dashboardData.testTypeDistribution?.integration || 0;
-  const currentPerformance = dashboardData.testTypeDistribution?.performance || 0;
-  const currentTotal = dashboardData.totalTestCases;
-  
-  for (let i = 0; i < 12; i++) {
-    const progress = i / 11; // 0 to 1
+    console.log('🎯 Navigating to test runs overview with result filter:', data.name);
     
-    // Calculate progressive values
-    const monthlyFunctional = Math.floor(currentFunctional * progress);
-    const monthlyRegression = Math.floor(currentRegression * progress);
-    const monthlySmoke = Math.floor(currentSmoke * progress);
-    const monthlyIntegration = Math.floor(currentIntegration * progress);
-    const monthlyPerformance = Math.floor(currentPerformance * progress);
-    const monthlyTotal = monthlyFunctional + monthlyRegression + monthlySmoke + monthlyIntegration + monthlyPerformance;
-    
-    trendOfTestCasesData.push({
-      month: months[i],
-      Functional: monthlyFunctional,
-      Regression: monthlyRegression,
-      Smoke: monthlySmoke,
-      Integration: monthlyIntegration,
-      Performance: monthlyPerformance,
-      Total: monthlyTotal
+    // Navigate to test runs overview page with result filter
+    const resultFilter = data.name.toLowerCase(); // 'passed' or 'failed'
+    navigate('/test-runs-overview', { 
+      state: { 
+        projectId: selectedProject.id,
+        resultFilter: resultFilter
+      },
+      search: `?result=${resultFilter}`
     });
-  }
-  
-  // Force December to match exactly the current values
-  trendOfTestCasesData[11] = {
-    month: 'Dec',
-    Functional: currentFunctional,
-    Regression: currentRegression,
-    Smoke: currentSmoke,
-    Integration: currentIntegration,
-    Performance: currentPerformance,
-    Total: currentTotal
   };
 
-  const automatedTestCases = dashboardData.automationDistribution?.automated || 0;
-  const notAutomatedTestCases = dashboardData.automationDistribution?.notAutomated || 0;
-  const notRequiredTestCases = dashboardData.automationDistribution?.notRequired || 0;
-  const cannotAutomateTestCases = dashboardData.automationDistribution?.cannotAutomate || 0;
-  const obsoleteTestCases = dashboardData.automationDistribution?.obsolete || 0;
-  const manualTestCases = notAutomatedTestCases + notRequiredTestCases + cannotAutomateTestCases + obsoleteTestCases;
+  const handleTypeOfTestCasesClick = (data: any) => {
+    if (!selectedProject) {
+      console.warn('No project selected, cannot navigate to test cases');
+      return;
+    }
+
+    // Map the clicked segment name back to the type ID
+    const typeNameToId: Record<string, number> = {};
+    Object.entries(TEST_CASE_TYPES).forEach(([id, name]) => {
+      typeNameToId[name] = parseInt(id);
+    });
+
+    const typeId = typeNameToId[data.name];
+    if (!typeId) {
+      console.warn('Could not find type ID for:', data.name);
+      return;
+    }
+
+    console.log('🎯 Navigating to test cases with type filter:', data.name, 'ID:', typeId);
+    
+    // Navigate to test cases page with type filter
+    // We'll pass the filter via URL state so the TestCases page can apply it
+    navigate('/test-cases', { 
+      state: { 
+        applyFilter: {
+          type: 'type',
+          value: typeId,
+          label: data.name
+        }
+      }
+    });
+  };
+
+  // Use real trend data from dashboard hook
+  const trendOfTestCasesData = dashboardData.trendsData || [];
+  
+  console.log('📈 Using real trend data from dashboard hook:', trendOfTestCasesData);
+
 
   return (
     <div className="space-y-6">
@@ -231,11 +243,12 @@ const Dashboard: React.FC = () => {
         {/* Active Test Runs */}
         <Card gradient className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Active Test Runs</h3>
+            <h3 className="text-lg font-semibold text-white">Test Cases in Active Test Runs</h3>
           </div>
           
           {totalActiveTestCases > 0 ? (
             <div className="h-64 flex items-center">
+              {console.log('📊 Rendering pie chart with data:', activeTestRunsData, 'Total:', totalActiveTestCases)}
               <ResponsiveContainer width="60%" height="100%">
                 <PieChart>
                   <Pie
@@ -247,9 +260,14 @@ const Dashboard: React.FC = () => {
                     dataKey="value"
                     startAngle={90}
                     endAngle={450}
+                    onClick={handleActiveTestRunsClick}
                   >
                     {activeTestRunsData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.color}
+                        style={{ cursor: 'pointer' }}
+                      />
                     ))}
                   </Pie>
                   <Tooltip 
@@ -257,8 +275,10 @@ const Dashboard: React.FC = () => {
                       backgroundColor: '#1F2937', 
                       border: '1px solid #374151',
                       borderRadius: '8px',
-                      color: '#F3F4F6' 
+                      color: '#06B6D4' 
                     }}
+                    labelStyle={{ color: '#06B6D4' }}
+                    itemStyle={{ color: '#06B6D4' }}
                   />
                   {/* Center text */}
                   <text 
@@ -284,14 +304,14 @@ const Dashboard: React.FC = () => {
               
               {/* Legend */}
               <div className="ml-6 space-y-3 flex-1">
-                {activeTestRunsData.map((entry, index) => (
+                {activeTestRunsData.filter(entry => entry.value > 0).map((entry, index) => (
                   <div key={index} className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="w-3 h-3 rounded-full mr-3" style={{ backgroundColor: entry.color }}></div>
                       <span className="text-sm text-gray-300">{entry.name}</span>
                     </div>
                     <span className="text-sm text-gray-300">
-                      {entry.value} ({activeTestRunsPercentages[index]}%)
+                      {entry.value} ({activeTestRunsPercentages[activeTestRunsData.indexOf(entry)]}%)
                     </span>
                   </div>
                 ))}
@@ -315,78 +335,85 @@ const Dashboard: React.FC = () => {
           </div>
           
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={closedTestRunsLineData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="#6B7280" 
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#6B7280" 
-                  fontSize={12}
-                  domain={[0, 'dataMax + 1']}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1F2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#F3F4F6' 
-                  }} 
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="#06B6D4" 
-                  strokeWidth={3}
-                  dot={{ fill: '#06B6D4', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, fill: '#06B6D4' }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {closedTestRunsLineData.length > 0 ? (
+              <>
+                {console.log('🔍 BAR_CHART_DEBUG: Rendering bar chart with data:', dashboardData.closedTestRunsData)}
+                {console.log('🔍 BAR_CHART_DEBUG: Data has', dashboardData.closedTestRunsData.length, 'items')}
+                {console.log('🔍 BAR_CHART_DEBUG: First data item:', dashboardData.closedTestRunsData[0])}
+              <>
+                {console.log('🔍 CHART_RENDER_DEBUG: About to render bar chart')}
+                {console.log('🔍 CHART_RENDER_DEBUG: Data length:', dashboardData.closedTestRunsData.length)}
+                {console.log('🔍 CHART_RENDER_DEBUG: Data content:', dashboardData.closedTestRunsData)}
+                {console.log('🔍 CHART_RENDER_DEBUG: First data item:', dashboardData.closedTestRunsData[0])}
+                {console.log('🔍 CHART_RENDER_DEBUG: Data structure check:', {
+                  hasMonth: !!dashboardData.closedTestRunsData[0]?.month,
+                  hasPassed: typeof dashboardData.closedTestRunsData[0]?.passed === 'number',
+                  hasFailed: typeof dashboardData.closedTestRunsData[0]?.failed === 'number',
+                  hasBlocked: typeof dashboardData.closedTestRunsData[0]?.blocked === 'number'
+                })}
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={closedTestRunsLineData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis 
+                    dataKey="month" 
+                    stroke="#6B7280" 
+                    fontSize={12}
+                  />
+                  <YAxis 
+                    stroke="#6B7280" 
+                    fontSize={12}
+                   allowDecimals={false}
+                    domain={[0, 'dataMax']}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1F2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      color: '#06B6D4' 
+                    }}
+                    formatter={(value) => [`${value} test run${value !== 1 ? 's' : ''}`, 'Closed']}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="value"
+                    stroke="#06B6D4" 
+                    strokeWidth={3}
+                    dot={{ fill: '#06B6D4', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, fill: '#06B6D4' }}
+                    connectNulls={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              </>
+              </>
+            ) : (
+              <>
+                {console.log('🔍 BAR_CHART_DEBUG: No data to display - showing empty state')}
+                {console.log('🔍 BAR_CHART_DEBUG: dashboardData.closedTestRunsData:', dashboardData.closedTestRunsData)}
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center text-gray-400">
+                  <CheckCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">No closed test runs</p>
+                  <p className="text-sm">Complete test runs to see historical data</p>
+                </div>
+              </div>
+              </>
+            )}
           </div>
         </Card>
       </div>
 
       {/* Results from Closed Test Runs */}
       <Card gradient className="p-6">
-        <div className="mb-4">
+        <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">Results from Closed Test Runs</h3>
         </div>
         
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={resultsFromClosedData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis 
-                dataKey="month" 
-                stroke="#6B7280" 
-                fontSize={12}
-              />
-              <YAxis 
-                stroke="#6B7280" 
-                fontSize={12}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1F2937', 
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#F3F4F6' 
-                }}
-                formatter={(value, name) => [
-                  `${name}: ${value}`,
-                  name
-                ]}
-              />
-              <Bar dataKey="Passed" stackId="a" fill="#10B981" />
-              <Bar dataKey="Failed" stackId="a" fill="#EF4444" />
-              <Bar dataKey="Blocked" stackId="a" fill="#8B5CF6" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <ClosedRunsCaseResultsStackedChart 
+          projectId={selectedProject?.id}
+          className="h-80"
+        />
       </Card>
 
       {/* Automation Coverage Metrics */}
@@ -437,9 +464,14 @@ const Dashboard: React.FC = () => {
                     dataKey="value"
                     startAngle={90}
                     endAngle={450}
+                    onClick={handleTypeOfTestCasesClick}
                   >
                     {typeOfTestCasesData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.color}
+                        style={{ cursor: 'pointer' }}
+                      />
                     ))}
                   </Pie>
                   <Tooltip 
@@ -447,8 +479,10 @@ const Dashboard: React.FC = () => {
                       backgroundColor: '#1F2937', 
                       border: '1px solid #374151',
                       borderRadius: '8px',
-                      color: '#F3F4F6' 
+                      color: '#06B6D4' 
                     }}
+                    labelStyle={{ color: '#06B6D4' }}
+                    itemStyle={{ color: '#06B6D4' }}
                   />
                   {/* Center text */}
                   <text 
@@ -523,49 +557,34 @@ const Dashboard: React.FC = () => {
                     backgroundColor: '#1F2937', 
                     border: '1px solid #374151',
                     borderRadius: '8px',
-                    color: '#F3F4F6' 
+                    color: '#06B6D4' 
                   }} 
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="Functional" 
-                  stroke="#10B981" 
-                  strokeWidth={2}
-                  dot={{ fill: '#10B981', strokeWidth: 2, r: 3 }}
-                  name="Functional"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="Regression" 
-                  stroke="#8B5CF6" 
-                  strokeWidth={2}
-                  dot={{ fill: '#8B5CF6', strokeWidth: 2, r: 3 }}
-                  name="Regression"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="Smoke" 
-                  stroke="#F59E0B" 
-                  strokeWidth={2}
-                  dot={{ fill: '#F59E0B', strokeWidth: 2, r: 3 }}
-                  name="Smoke"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="Integration" 
-                  stroke="#EF4444" 
-                  strokeWidth={2}
-                  dot={{ fill: '#EF4444', strokeWidth: 2, r: 3 }}
-                  name="Integration"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="Performance" 
-                  stroke="#06B6D4" 
-                  strokeWidth={2}
-                  dot={{ fill: '#06B6D4', strokeWidth: 2, r: 3 }}
-                  name="Performance"
-                />
+                {/* Dynamically render lines for all test case types that exist in the data */}
+                {trendOfTestCasesData.length > 0 && Object.keys(trendOfTestCasesData[0])
+                  .filter(key => key !== 'month' && key !== 'date' && key !== 'Total')
+                  .map((typeKey, index) => {
+                    // Map type name back to ID to get consistent color
+                    const typeNameToId: Record<string, number> = {};
+                    Object.entries(TEST_CASE_TYPES).forEach(([id, name]) => {
+                      typeNameToId[name] = parseInt(id);
+                    });
+                    
+                    const typeId = typeNameToId[typeKey];
+                    const color = typeId ? getTypeColor(typeId) : '#6B7280';
+                    
+                    return (
+                      <Line 
+                        key={typeKey}
+                        type="monotone" 
+                        dataKey={typeKey} 
+                        stroke={color} 
+                        strokeWidth={2}
+                        dot={{ fill: color, strokeWidth: 2, r: 3 }}
+                        name={typeKey}
+                      />
+                    );
+                  })}
                 <Line 
                   type="monotone" 
                   dataKey="Total" 
@@ -581,6 +600,4 @@ const Dashboard: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default Dashboard;
+}

@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useCallback } from 'react';
-import { Project, TestCase, TestExecution, SharedStep, TEST_CASE_TYPES } from '../types';
+import { Project, TestCase, TestExecution, SharedStep, TEST_CASE_TYPES, TEST_RESULTS } from '../types';
 import { testCasesApiService } from '../services/testCasesApi';
 import { sharedStepsApiService } from '../services/sharedStepsApi';
 import { foldersApiService } from '../services/foldersApi';
+import { testRunsApiService } from '../services/testRunsApi';
 
 interface DashboardData {
   // Real API Data
   totalProjects: number;
   activeProjects: number;
   totalTestCases: number;
+  totalTestCasesInActiveRuns: number;
   totalFolders: number;
   totalSharedSteps: number;
   totalTestRuns: number;
@@ -54,13 +56,18 @@ interface DashboardData {
   automatedTestCases: number;
   manualTestCases: number;
   
-  // Mock execution data (since we don't have execution API yet)
+  // Real execution data from test runs
   passRate: number;
   failRate: number;
   executionRate: number;
   actualPassed: number;
   actualFailed: number;
   actualBlocked: number;
+  actualRetest: number;
+  actualSkipped: number;
+  actualUntested: number;
+  actualInProgress: number;
+  actualUnknown: number;
   trendsData: Array<{
     date: string;
     passed: number;
@@ -81,7 +88,21 @@ interface DashboardData {
     month: string;
     total: number;
   }>;
+  closedTestRunsLineData: Array<{
+    month: string;
+    value: number;
+  }>;
 }
+
+// State mapping for test runs
+const TEST_RUN_STATES = {
+  1: 'New',
+  2: 'In progress', 
+  3: 'Under review',
+  4: 'Rejected',
+  5: 'Done',
+  6: 'Closed'
+} as const;
 
 export const useDashboardData = (selectedProject: Project | null, projects: Project[]) => {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -113,6 +134,19 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
       let totalSharedSteps = 0;
       let testCases: TestCase[] = [];
       let sharedSteps: SharedStep[] = [];
+      let actualPassed = 0;
+      let actualFailed = 0;
+      let actualBlocked = 0;
+      let actualRetest = 0;
+      let actualSkipped = 0;
+      let actualUntested = 0;
+      let actualInProgress = 0;
+      let actualUnknown = 0;
+      let totalTestCasesInActiveRuns = 0;
+      let closedTestRuns: any[] = [];
+      let closedTestRunsLineData: Array<{ month: string; value: number }> = [];
+      let closedTestRunsData: Array<{ month: string; total: number }> = [];
+      let trendsData: Array<any> = [];
 
       if (selectedProject) {
         console.log(`📊 Fetching data for project: ${selectedProject.name}`);
@@ -124,102 +158,370 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
           throw new Error(`Invalid project ID: ${selectedProject.id}`);
         }
         
-        // Always fetch folders for the project
-        console.log(`📁 Making API call: /folders?project=${selectedProject.id}&itemsPerPage=1000`);
-        const foldersResponse = await foldersApiService.getFolders(selectedProject.id);
-        totalFolders = foldersResponse.data.length;
-        console.log(`📁 API Response received: ${totalFolders} folders`);
-
-        // CRITICAL: Always fetch all test cases for the project (across all folders)
-        console.log(`🧪 Making API call: /test_cases?project=${selectedProject.id}&page=1&itemsPerPage=1000`);
-        console.log(`🧪 API call will be made NOW for project ID: "${selectedProject.id}"`);
-        const testCasesResponse = await testCasesApiService.getTestCases(1, 1000, selectedProject.id);
-        console.log(`🧪 API Response received:`, testCasesResponse);
-        console.log(`🧪 API Response data length:`, testCasesResponse.data?.length || 0);
+        // OPTIMIZATION: Make all API calls in parallel instead of sequentially
+        console.log(`🚀 Making parallel API calls for project: ${selectedProject.name}`);
         
-        const transformedTestCases = testCasesResponse.data.map(apiTestCase => 
-          testCasesApiService.transformApiTestCase(apiTestCase)
+        const [foldersResponse, sharedStepsResponse, testRunsResponse] = await Promise.all([
+          foldersApiService.getFolders(selectedProject.id, 1, 1000),
+          sharedStepsApiService.getSharedSteps(selectedProject.id, 1, 1000),
+          testRunsApiService.getTestRuns(selectedProject.id, 1, 1000)
+        ]);
+        
+        console.log(`🏃 Test runs data:`, testRunsResponse.data.map(tr => ({
+          id: tr.attributes.id,
+          name: tr.attributes.name,
+          state: tr.attributes.state,
+          status: tr.attributes.status,
+          caseResults: tr.attributes.caseResults,
+          hasValidCaseResults: !!(tr.attributes.caseResults && typeof tr.attributes.caseResults === 'object')
+        })));
+        
+        console.log('🔍 DETAILED TEST RUNS ANALYSIS:');
+        testRunsResponse.data.forEach((tr, index) => {
+          console.log(`🏃 Test Run ${index + 1}:`);
+          console.log(`   - ID: ${tr.attributes.id}`);
+          console.log(`   - Name: ${tr.attributes.name}`);
+          console.log(`   - State: ${tr.attributes.state} (1=New, 2=In Progress, 3=Under Review)`);
+          console.log(`   - Status: ${tr.attributes.status}`);
+          console.log(`   - caseResults type: ${typeof tr.attributes.caseResults}`);
+          console.log(`   - caseResults value:`, tr.attributes.caseResults);
+          console.log(`   - Is active test run: ${tr.attributes.state === 1 || tr.attributes.state === 2 || tr.attributes.state === 3}`);
+          
+          if (tr.attributes.caseResults && typeof tr.attributes.caseResults === 'object') {
+            console.log(`   - caseResults keys:`, Object.keys(tr.attributes.caseResults));
+            console.log(`   - caseResults values:`, Object.values(tr.attributes.caseResults));
+            console.log(`   - passed: ${tr.attributes.caseResults.passed || 0}`);
+            console.log(`   - failed: ${tr.attributes.caseResults.failed || 0}`);
+            console.log(`   - blocked: ${tr.attributes.caseResults.blocked || 0}`);
+          } else {
+            console.log(`   - ❌ NO VALID caseResults data`);
+          }
+        });
+        
+        // Extract REAL execution data from caseResults in ACTIVE test runs only
+        testRunsResponse.data.forEach(apiTestRun => {
+          // Active test runs are those with state 1 (New), 2 (In Progress), or 3 (Under Review)
+          const isActiveTestRun = apiTestRun.attributes.state === 1 || // New
+                                  apiTestRun.attributes.state === 2 || // In progress  
+                                  apiTestRun.attributes.state === 3;   // Under review
+          
+          console.log(`🏃 Processing test run: ${apiTestRun.attributes.name}`);
+          console.log(`🏃 Test run state: ${apiTestRun.attributes.state} (1=New, 2=In Progress, 3=Under Review)`);
+          console.log(`🏃 Is active test run: ${isActiveTestRun}`);
+          
+          if (!isActiveTestRun) {
+            console.log(`🏃 ⏭️ SKIPPING test run "${apiTestRun.attributes.name}" - not active (state: ${apiTestRun.attributes.state})`);
+            return;
+          }
+          
+          console.log(`🏃 ✅ ACTIVE test run "${apiTestRun.attributes.name}" - processing caseResults...`);
+          console.log(`🏃 caseResults:`, apiTestRun.attributes.caseResults);
+          
+          // Count ALL test cases in this active test run (from relationships)
+          const testCasesInThisRun = apiTestRun.relationships.testCases?.data?.length || 0;
+          totalTestCasesInActiveRuns += testCasesInThisRun;
+          
+          console.log(`🏃 Test cases in this run: ${testCasesInThisRun}`);
+          console.log(`🏃 Running total test cases in active runs: ${totalTestCasesInActiveRuns}`);
+          
+          // Check if this test run has caseResults data (it's an array of individual results)
+          if (apiTestRun.attributes.caseResults && Array.isArray(apiTestRun.attributes.caseResults)) {
+            console.log(`🏃 ✅ VALID caseResults array found for "${apiTestRun.attributes.name}"`);
+            console.log(`🏃 caseResults array length:`, apiTestRun.attributes.caseResults.length);
+            
+            // Count each result type from the array of individual test case results
+            let runPassed = 0;
+            let runFailed = 0;
+            let runBlocked = 0;
+            let runRetest = 0;
+            let runSkipped = 0;
+            let runUntested = 0;
+            let runInProgress = 0;
+            let runUnknown = 0;
+            
+            apiTestRun.attributes.caseResults.forEach((testCaseResult: any, index: number) => {
+              console.log(`🏃   Test case ${index + 1}:`, testCaseResult);
+              console.log(`🏃     - test_case_id: ${testCaseResult.test_case_id}`);
+              console.log(`🏃     - result: ${testCaseResult.result}`);
+              
+              // Handle both numeric and string result values
+              const rawResult = testCaseResult.result;
+              let resultLabel: string;
+              
+              if (typeof rawResult === 'number') {
+                // Convert numeric ID to string label
+                resultLabel = TEST_RESULTS[rawResult as TestResultId]?.toLowerCase() || 'unknown';
+              } else if (typeof rawResult === 'string') {
+                resultLabel = rawResult.toLowerCase();
+              } else {
+                resultLabel = 'unknown';
+              }
+              
+              console.log(`🏃     - processed result: ${resultLabel}`);
+              
+              switch (resultLabel) {
+                case 'passed':
+                  runPassed++;
+                  break;
+                case 'failed':
+                  runFailed++;
+                  break;
+                case 'blocked':
+                  runBlocked++;
+                  break;
+                case 'retest':
+                  runRetest++;
+                  break;
+                case 'skipped':
+                  runSkipped++;
+                  break;
+                case 'untested':
+                  runUntested++;
+                  break;
+                case 'in progress':
+                  runInProgress++;
+                  break;
+                case 'unknown':
+                  runUnknown++;
+                  break;
+                default:
+                  console.log(`🏃     - Unknown result type: ${resultLabel}`);
+                  runUnknown++;
+              }
+            });
+            
+            console.log(`🏃 Calculated counts for "${apiTestRun.attributes.name}":`, {
+              passed: runPassed,
+              failed: runFailed,
+              blocked: runBlocked,
+              retest: runRetest,
+              skipped: runSkipped,
+              untested: runUntested,
+              inProgress: runInProgress,
+              unknown: runUnknown
+            });
+            
+            actualPassed += runPassed;
+            actualFailed += runFailed;
+            actualBlocked += runBlocked;
+            actualRetest += runRetest;
+            actualSkipped += runSkipped;
+            actualUntested += runUntested;
+            actualInProgress += runInProgress;
+            actualUnknown += runUnknown;
+            
+            // For test cases without execution results, count them as "untested"
+            const testCasesWithResults = apiTestRun.attributes.caseResults.length;
+            const testCasesWithoutResults = testCasesInThisRun - testCasesWithResults;
+            if (testCasesWithoutResults > 0) {
+              actualUntested += testCasesWithoutResults;
+              console.log(`🏃 Added ${testCasesWithoutResults} test cases without results as "untested"`);
+            }
+            
+            console.log(`🏃 Running totals after "${apiTestRun.attributes.name}":`, {
+              totalTestCasesInActiveRuns,
+              actualPassed,
+              actualFailed,
+              actualBlocked,
+              actualRetest,
+              actualSkipped,
+              actualUntested,
+              actualInProgress,
+              actualUnknown
+            });
+          } else {
+            console.log(`🏃 ❌ Test run "${apiTestRun.attributes.name}" has NO VALID caseResults array`);
+            console.log(`🏃    - caseResults value:`, apiTestRun.attributes.caseResults);
+            console.log(`🏃    - caseResults type:`, typeof apiTestRun.attributes.caseResults);
+            console.log(`🏃    - Is array:`, Array.isArray(apiTestRun.attributes.caseResults));
+            
+            // If no caseResults, count all test cases in this run as "untested"
+            actualUntested += testCasesInThisRun;
+            console.log(`🏃 No caseResults - counted ${testCasesInThisRun} test cases as "untested"`);
+          }
+        });
+        
+        console.log('🏃 📊 FINAL AGGREGATED RESULTS:');
+        console.log(`🏃 📊 Total test case instances in active runs: ${totalTestCasesInActiveRuns}`);
+        console.log(`🏃 📊 Total passed: ${actualPassed}`);
+        console.log(`🏃 📊 Total failed: ${actualFailed}`);
+        console.log(`🏃 📊 Total blocked: ${actualBlocked}`);
+        console.log(`🏃 📊 Total retest: ${actualRetest}`);
+        console.log(`🏃 📊 Total skipped: ${actualSkipped}`);
+        console.log(`🏃 📊 Total untested: ${actualUntested}`);
+        console.log(`🏃 📊 Total in progress: ${actualInProgress}`);
+        console.log(`🏃 📊 Total unknown: ${actualUnknown}`);
+        console.log(`🏃 📊 Sum check: ${actualPassed + actualFailed + actualBlocked} should equal ${totalTestCasesInActiveRuns}`);
+        
+        // Process closed test runs from the same test runs response
+        console.log(`📊 Processing closed test runs from test runs response...`);
+        console.log(`📊 Total test runs in response:`, testRunsResponse.data.length);
+        
+        // Filter for closed test runs (state 6 = Closed) from the same response
+        console.log('🔍 BAR_CHART_DEBUG: Starting to filter for closed test runs...');
+        const closedTestRunsFromResponse = testRunsResponse.data.filter((apiTestRun, index) => {
+          const isClosed = apiTestRun.attributes.state === 6;
+          console.log(`🔍 BAR_CHART_DEBUG: Test run ${index + 1}: "${apiTestRun.attributes.name}" - state: ${apiTestRun.attributes.state}, is closed: ${isClosed}, closedAt: ${apiTestRun.attributes.closedAt}`);
+          return isClosed;
+        });
+        
+        console.log('🔍 BAR_CHART_DEBUG: Found', closedTestRunsFromResponse.length, 'closed test runs');
+        console.log('🔍 BAR_CHART_DEBUG: Closed test runs details:', closedTestRunsFromResponse.map(tr => ({
+          id: tr.attributes.id,
+          name: tr.attributes.name,
+          state: tr.attributes.state,
+          closedAt: tr.attributes.closedAt,
+          caseResults: tr.attributes.caseResults,
+          caseResultsType: typeof tr.attributes.caseResults,
+          caseResultsIsArray: Array.isArray(tr.attributes.caseResults),
+          caseResultsLength: Array.isArray(tr.attributes.caseResults) ? tr.attributes.caseResults.length : 'not array',
+          caseResultsContent: Array.isArray(tr.attributes.caseResults) ? tr.attributes.caseResults : 'not array'
+        })));
+        
+        closedTestRunsFromResponse.forEach((apiTestRun, index) => {
+          console.log(`🔍 BAR_CHART_DEBUG: DETAILED ANALYSIS ${index + 1}:`);
+        
+          console.log(`🔍 BAR_CHART_DEBUG:   Test Run: "${apiTestRun.attributes.name}"`);
+          console.log(`🔍 BAR_CHART_DEBUG:   State: ${apiTestRun.attributes.state} (should be 6 for closed)`);
+          console.log(`🔍 BAR_CHART_DEBUG:   closedAt: ${apiTestRun.attributes.closedAt}`);
+          console.log(`🔍 BAR_CHART_DEBUG:   caseResults exists: ${!!apiTestRun.attributes.caseResults}`);
+          console.log(`🔍 BAR_CHART_DEBUG:   caseResults type: ${typeof apiTestRun.attributes.caseResults}`);
+          console.log(`🔍 BAR_CHART_DEBUG:   caseResults is array: ${Array.isArray(apiTestRun.attributes.caseResults)}`);
+          
+          if (apiTestRun.attributes.caseResults) {
+            console.log(`🔍 BAR_CHART_DEBUG:   caseResults raw value:`, apiTestRun.attributes.caseResults);
+            
+            if (Array.isArray(apiTestRun.attributes.caseResults)) {
+              console.log(`🔍 BAR_CHART_DEBUG:   caseResults array length: ${apiTestRun.attributes.caseResults.length}`);
+              
+              if (apiTestRun.attributes.caseResults.length > 0) {
+                console.log(`🔍 BAR_CHART_DEBUG:   First caseResult sample:`, apiTestRun.attributes.caseResults[0]);
+                console.log(`🔍 BAR_CHART_DEBUG:   All caseResults:`, apiTestRun.attributes.caseResults);
+              } else {
+                console.log(`🔍 BAR_CHART_DEBUG:   ❌ caseResults array is EMPTY`);
+              }
+            } else {
+              console.log(`🔍 BAR_CHART_DEBUG:   ❌ caseResults is NOT an array`);
+            }
+          } else {
+            console.log(`🔍 BAR_CHART_DEBUG:   ❌ caseResults is NULL/UNDEFINED`);
+          }
+        });
+        
+        // Generate bar chart data using the helper function
+        closedTestRunsData = generateClosedTestRunsBarData(closedTestRunsFromResponse);
+        
+        console.log('🔍 BAR_CHART_DEBUG: Generated bar chart data:', closedTestRunsData);
+        console.log('🔍 BAR_CHART_DEBUG: Bar chart data length:', closedTestRunsData.length);
+        console.log('🔍 BAR_CHART_DEBUG: Sample bar chart data point:', closedTestRunsData[0]);
+        
+        // Generate line chart data using the helper function
+        closedTestRunsLineData = generateClosedTestRunsLineData(closedTestRunsFromResponse.map(apiTestRun => ({
+          id: apiTestRun.attributes.id,
+          name: apiTestRun.attributes.name,
+          closedAt: apiTestRun.attributes.closedAt ? new Date(apiTestRun.attributes.closedAt) : null
+        })));
+        
+        // Fetch test cases - GET ALL PAGES to ensure complete data
+        console.log(`🧪 Fetching ALL test cases for project: ${selectedProject.name}`);
+        
+        // Fetch first page to get total count
+        const firstPageResponse = await testCasesApiService.getTestCases(1, 30, selectedProject.id);
+        const totalTestCasesFromAPI = firstPageResponse.meta.totalItems;
+        const itemsPerPage = firstPageResponse.meta.itemsPerPage;
+        const totalPages = Math.ceil(totalTestCasesFromAPI / itemsPerPage);
+        
+        console.log(`🧪 Total test cases: ${totalTestCasesFromAPI}, Total pages: ${totalPages}`);
+        
+        // Start with first page data
+        let allTestCasesData = [...firstPageResponse.data];
+        
+        // Fetch remaining pages in parallel if there are more
+        if (totalPages > 1) {
+          console.log(`🚀 Fetching remaining ${totalPages - 1} pages in parallel...`);
+          
+          const pagePromises = [];
+          for (let page = 2; page <= totalPages; page++) {
+            pagePromises.push(testCasesApiService.getTestCases(page, 30, selectedProject.id));
+          }
+          
+          const pageResponses = await Promise.all(pagePromises);
+          
+          // Combine all page data
+          pageResponses.forEach(response => {
+            allTestCasesData = [...allTestCasesData, ...response.data];
+          });
+          
+          console.log(`🧪 ✅ Fetched ALL ${allTestCasesData.length} test cases from ${totalPages} pages`);
+          console.log(`🧪 Expected: ${totalTestCasesFromAPI}, Got: ${allTestCasesData.length}`);
+        }
+        
+        // Transform all test cases
+        testCases = allTestCasesData.map(apiTestCase => 
+          testCasesApiService.transformApiTestCase(apiTestCase, firstPageResponse.included)
         );
         
-        // Wait for all transformations to complete (since they're now async)
-        testCases = await Promise.all(transformedTestCases);
-        totalTestCases = testCases.length;
-        console.log(`🧪 FINAL RESULT: Found ${totalTestCases} test cases for project ${selectedProject.name}`);
-
-        // CRITICAL: Always fetch shared steps for the project
-        console.log(`🔗 Making API call: /shared_steps?project=${selectedProject.id}&page=1&itemsPerPage=1000`);
-        console.log(`🔗 API call will be made NOW for project ID: "${selectedProject.id}"`);
-        const sharedStepsResponse = await sharedStepsApiService.getSharedSteps(selectedProject.id, 1, 1000);
-        console.log(`🔗 API Response received:`, sharedStepsResponse);
-        console.log(`🔗 API Response data length:`, sharedStepsResponse.data?.length || 0);
+        // Use the actual count we fetched
+        totalTestCases = allTestCasesData.length;
+        console.log(`🧪 Final test cases count: ${totalTestCases}`);
         
+        console.log(`✅ All API calls completed for project: ${selectedProject.name}`);
+        
+        // Process folders
+        totalFolders = foldersResponse.data.length;
+        console.log(`📁 Folders: ${totalFolders}`);
+        
+        // Process shared steps
         sharedSteps = sharedStepsResponse.data.map(apiSharedStep => 
           sharedStepsApiService.transformApiSharedStep(apiSharedStep, sharedStepsResponse.included)
         );
         totalSharedSteps = sharedSteps.length;
-        console.log(`🔗 FINAL RESULT: Found ${totalSharedSteps} shared steps for project ${selectedProject.name}`);
+        console.log(`🔗 Shared steps: ${totalSharedSteps}`);
+        
+        console.log(`📊 REAL execution data from caseResults:`, {
+          totalTestCaseInstances: totalTestCasesInActiveRuns,
+          passed: actualPassed,
+          failed: actualFailed,
+          blocked: actualBlocked
+        });
+        console.log(`📊 FINAL VALUES being set in dashboard data:`, {
+          actualPassed,
+        });
+        const generatedClosedTestRunsData = generateClosedTestRunsData(closedTestRuns);
+        closedTestRunsData = generatedClosedTestRunsData;
+        // Generate trends data using real test case creation dates
+        trendsData = generateTrendData(testCases, totalTestCases);
+        
       } else {
-        // For all projects view, use API calls without project parameter (much faster)
+        // For all projects view, use aggregated data from projects array
         console.log(`📊 All projects view - fetching data across all projects`);
         
-        // Fetch all test cases without project filter
-        console.log(`🧪 Making API call: /test_cases?page=1&itemsPerPage=1000 (no project filter)`);
-        const allTestCasesResponse = await testCasesApiService.getTestCases(1, 1000);
-        const transformedAllTestCases = allTestCasesResponse.data.map(apiTestCase => 
-          testCasesApiService.transformApiTestCase(apiTestCase)
-        );
-        testCases = await Promise.all(transformedAllTestCases);
-        totalTestCases = testCases.length;
-        console.log(`🧪 RESULT: Found ${totalTestCases} test cases across all projects`);
+        // Use aggregated data from projects array (much faster)
+        totalTestCases = projects.reduce((sum, p) => sum + (p.testCasesCount || 0), 0);
+        totalFolders = projects.length * 2; // Estimate
+        totalSharedSteps = 0; // Not available for all projects view
+        testCases = []; // No detailed analysis for all projects view
         
-        // Fetch all shared steps without project filter
-        console.log(`🔗 Making API call: /shared_steps?page=1&itemsPerPage=1000 (no project filter)`);
-        // Note: We need to call shared steps for each project since there's no global endpoint
-        let allSharedSteps: SharedStep[] = [];
-        for (const project of projects.slice(0, 5)) { // Limit to first 5 projects to avoid too many calls
-          if (project.id && project.id !== '' && project.id !== 'undefined') {
-            try {
-              const projectSharedStepsResponse = await sharedStepsApiService.getSharedSteps(project.id, 1, 100);
-              const projectSharedSteps = projectSharedStepsResponse.data.map(apiSharedStep => 
-                sharedStepsApiService.transformApiSharedStep(apiSharedStep, projectSharedStepsResponse.included)
-              );
-              allSharedSteps = [...allSharedSteps, ...projectSharedSteps];
-            } catch (error) {
-              console.warn(`⚠️ Failed to fetch shared steps for project ${project.name}:`, error);
-            }
-          }
+        // For all projects view, we'll use basic mock data for now since we'd need to fetch test runs for all projects
+        if (totalTestCases > 0) {
+          // Generate some basic execution data for all projects view
+          actualPassed = Math.floor(totalTestCases * 0.7); // 70% passed
+          actualFailed = Math.floor(totalTestCases * 0.2); // 20% failed
+          actualBlocked = Math.floor(totalTestCases * 0.1); // 10% blocked
         }
-        sharedSteps = allSharedSteps;
-        totalSharedSteps = sharedSteps.length;
-        console.log(`🔗 RESULT: Found ${totalSharedSteps} shared steps across projects`);
-        
-        // For folders, we'll estimate based on projects
-        totalFolders = projects.length * 2; // Rough estimate
       }
 
       // Analyze real test case data
       const automationDistribution = {
-        notAutomated: testCases.filter(tc => {
-          const match = tc.automationStatus === 1 || tc.automationStatus === '1';
-          return match;
-        }).length,
-        automated: testCases.filter(tc => {
-          const match = tc.automationStatus === 2 || tc.automationStatus === '2';
-          return match;
-        }).length,
-        notRequired: testCases.filter(tc => {
-          const match = tc.automationStatus === 3 || tc.automationStatus === '3';
-          return match;
-        }).length,
-        cannotAutomate: testCases.filter(tc => {
-          const match = tc.automationStatus === 4 || tc.automationStatus === '4';
-          return match;
-        }).length,
-        obsolete: testCases.filter(tc => {
-          const match = tc.automationStatus === 5 || tc.automationStatus === '5';
-          return match;
-        }).length,
+        notAutomated: testCases.filter(tc => tc.automationStatus === 1).length,
+        automated: testCases.filter(tc => tc.automationStatus === 2).length,
+        notRequired: testCases.filter(tc => tc.automationStatus === 3).length,
+        cannotAutomate: testCases.filter(tc => tc.automationStatus === 4).length,
+        obsolete: testCases.filter(tc => tc.automationStatus === 5).length,
       };
+      
+      console.log(`🤖 Automation distribution:`, automationDistribution);
+      console.log(`🤖 Sample test cases automation status:`, testCases.slice(0, 5).map(tc => ({ id: tc.id, automationStatus: tc.automationStatus, type: typeof tc.automationStatus })));
 
       // Calculate automation metrics based on real data
       const automatedTestCases = automationDistribution.automated; // ID 2 = "Automated"
@@ -232,18 +534,26 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
         Math.round((automatedTestCases / (automatedTestCases + manualTestCases)) * 100) : 0;
 
       const testTypeDistribution = {
-        1: testCases.filter(tc => getTestTypeNumber(tc.type) === 1).length, // Other
-        2: testCases.filter(tc => getTestTypeNumber(tc.type) === 2).length, // Acceptance
-        3: testCases.filter(tc => getTestTypeNumber(tc.type) === 3).length, // Accessibility
-        4: testCases.filter(tc => getTestTypeNumber(tc.type) === 4).length, // Compatibility
-        5: testCases.filter(tc => getTestTypeNumber(tc.type) === 5).length, // Destructive
-        6: testCases.filter(tc => getTestTypeNumber(tc.type) === 6).length, // Functional
-        7: testCases.filter(tc => getTestTypeNumber(tc.type) === 7).length, // Performance
-        8: testCases.filter(tc => getTestTypeNumber(tc.type) === 8).length, // Regression
-        9: testCases.filter(tc => getTestTypeNumber(tc.type) === 9).length, // Security
-        10: testCases.filter(tc => getTestTypeNumber(tc.type) === 10).length, // Smoke & Sanity
-        11: testCases.filter(tc => getTestTypeNumber(tc.type) === 11).length, // Usability
+        1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0, 11: 0
       };
+      
+      // Count test cases by type
+      testCases.forEach(tc => {
+        // Map string types back to numeric IDs for counting
+        const typeToId: Record<string, number> = {
+          'other': 1, 'acceptance': 2, 'accessibility': 3, 'compatibility': 4,
+          'destructive': 5, 'functional': 6, 'performance': 7, 'regression': 8,
+          'security': 9, 'smoke': 10, 'usability': 11
+        };
+        
+        const typeId = typeToId[tc.type];
+        if (typeId && testTypeDistribution[typeId as keyof typeof testTypeDistribution] !== undefined) {
+          testTypeDistribution[typeId as keyof typeof testTypeDistribution]++;
+        }
+      });
+      
+      console.log(`📊 Test type distribution:`, testTypeDistribution);
+      console.log(`📊 Sample test cases types:`, testCases.slice(0, 10).map(tc => ({ id: tc.id, type: tc.type })));
 
       const statusDistribution = {
         draft: testCases.filter(tc => tc.status === 'draft').length,
@@ -258,17 +568,24 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
         critical: testCases.filter(tc => tc.priority === 'critical').length,
       };
 
-      // Generate mock execution data based on REAL test case count
-      const mockExecutionData = generateMockExecutionData(
-        totalTestCases, 
-        selectedProject?.id || 'all-projects'
-      );
-
+      // Calculate execution rates
+      const executionRate = totalTestCases > 0 ? Math.round((totalTestCasesInActiveRuns / totalTestCases) * 100) : 0;
+      const passRate = totalTestCasesInActiveRuns > 0 ? Math.round((actualPassed / totalTestCasesInActiveRuns) * 100) : 0;
+      const failRate = totalTestCasesInActiveRuns > 0 ? Math.round((actualFailed / totalTestCasesInActiveRuns) * 100) : 0;
+      const blockedRate = totalTestCasesInActiveRuns > 0 ? Math.round((actualBlocked / totalTestCasesInActiveRuns) * 100) : 0;
+      
+      // Generate REAL closed test runs data from actual API data
+      closedTestRunsData = generateClosedTestRunsData(closedTestRuns);
+      
+      // Generate trends data for last 7 days using real test case creation dates
+      trendsData = selectedProject ? generateTrendData(testCases, totalTestCases) : [];
+      
       const data: DashboardData = {
         // Real API Data
         totalProjects: projects.length,
         activeProjects: projects.filter(p => p.status === 'active').length,
         totalTestCases,
+        totalTestCasesInActiveRuns,
         totalTestRuns: selectedProject?.testRunsCount || projects.reduce((sum, p) => sum + (p.testRunsCount || 0), 0),
         totalFolders,
         totalSharedSteps,
@@ -282,15 +599,32 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
         priorityDistribution,
         automationCoverage,
         
-        // Mock execution data (until we have execution APIs)
-        ...mockExecutionData
+        // Real execution data from active test runs (only passed/failed for pie chart)
+        passRate,
+        failRate,
+        executionRate,
+        actualPassed,
+        actualFailed,
+        actualBlocked,
+        actualRetest,
+        actualSkipped,
+        actualUntested,
+        actualInProgress,
+        actualUnknown,
+        
+        // Real historical data from closed test runs
+        trendsData,
+        recentExecutions: [], // Empty for now since we don't have execution history API
+        closedTestRuns: [],
+        closedTestRunsData,
+        closedTestRunsLineData
       };
 
       setDashboardData(data);
 
     } catch (err) {
       console.error('❌ CRITICAL ERROR in dashboard data generation:', err);
-      console.error('❌ Error details:', {
+      console.log(`📊 REAL execution data from ACTIVE test runs caseResults:`, {
         message: err instanceof Error ? err.message : 'Unknown error',
         selectedProject: selectedProject?.name,
         projectId: selectedProject?.id,
@@ -320,127 +654,298 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
   return { dashboardData, loading, error, refreshData: fetchDashboardData };
 };
 
-// Helper function to generate mock execution data based on actual test case count
-function generateMockExecutionData(testCaseCount: number, projectId: string = 'default') {
-  // Use project ID as seed for consistent data
-  const seed = hashString(projectId);
-  const rng = new SeededRandom(seed);
-
-  console.log(`🎲 Generating mock execution data for ${testCaseCount} test cases (project: ${projectId})`);
-
-  if (testCaseCount === 0) {
-    return {
-      passRate: 0,
-      failRate: 0,
-      executionRate: 0,
-      actualPassed: 0,
-      actualFailed: 0,
-      actualBlocked: 0,
-      trendsData: [],
-      recentExecutions: [],
-      closedTestRuns: [],
-      closedTestRunsData: []
-    };
-  }
-
-  // Mock some execution data based on ACTUAL test case count
-  const executedCount = Math.min(testCaseCount, Math.floor(testCaseCount * rng.nextFloat(0.6, 1.0))); // 60-100% executed
-  const passedCount = Math.floor(executedCount * rng.nextFloat(0.7, 0.9)); // 70-90% pass rate
-  const failedCount = Math.floor((executedCount - passedCount) * rng.nextFloat(0.5, 0.8)); // Some failures
-  const blockedCount = executedCount - passedCount - failedCount; // Rest blocked
-
-  const passRate = executedCount > 0 ? Math.round((passedCount / executedCount) * 100) : 0;
-  const failRate = executedCount > 0 ? Math.round((failedCount / executedCount) * 100) : 0;
-  const executionRate = testCaseCount > 0 ? Math.round((executedCount / testCaseCount) * 100) : 0;
-
-  console.log(`📈 Mock execution data:`, {
-    totalTestCases: testCaseCount,
-    executed: executedCount,
-    passed: passedCount,
-    failed: failedCount,
-    blocked: blockedCount,
-    passRate,
-    failRate,
-    executionRate
+// Generate bar chart data from closed test runs with real caseResults
+function generateClosedTestRunsBarData(closedTestRuns: any[]): Array<{
+  month: string;
+  passed: number;
+  failed: number;
+  blocked: number;
+  retest: number;
+  skipped: number;
+  untested: number;
+}> {
+  const monthlyData: { [key: string]: { 
+    month: string; 
+    passed: number; 
+    failed: number; 
+    blocked: number; 
+    retest: number; 
+    skipped: number; 
+    untested: number; 
+  } } = {};
+  
+  console.log('🔍 BAR_CHART_DEBUG: generateClosedTestRunsBarData called with', closedTestRuns.length, 'closed test runs');
+  
+  // Process each closed test run
+  closedTestRuns.forEach((apiTestRun, index) => {
+    console.log(`🔍 BAR_CHART_DEBUG: Processing closed test run ${index + 1}:`, {
+      id: apiTestRun.attributes.id,
+      name: apiTestRun.attributes.name,
+      state: apiTestRun.attributes.state,
+      closedAt: apiTestRun.attributes.closedAt,
+      caseResults: apiTestRun.attributes.caseResults,
+      caseResultsIsArray: Array.isArray(apiTestRun.attributes.caseResults),
+      caseResultsLength: Array.isArray(apiTestRun.attributes.caseResults) ? apiTestRun.attributes.caseResults.length : 'N/A'
+    });
+    
+    const closedAt = apiTestRun.attributes.closedAt;
+    
+    if (!closedAt) {
+      console.log('🔍 BAR_CHART_DEBUG: ⚠️ Test run has no closedAt date:', apiTestRun.attributes.name);
+      return;
+    }
+    
+    const closedDate = new Date(closedAt);
+    console.log('🔍 BAR_CHART_DEBUG: Parsed closedDate:', closedDate);
+    
+    const monthKey = closedDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }); // "Dec 24"
+    
+    console.log(`🔍 BAR_CHART_DEBUG: Generated month key: ${monthKey} from closedAt: ${closedAt}`);
+    
+    // Initialize month if not exists
+    if (!monthlyData[monthKey]) {
+      monthlyData[monthKey] = {
+        month: monthKey,
+        passed: 0,
+        failed: 0,
+        blocked: 0,
+        retest: 0,
+        skipped: 0,
+        untested: 0
+      };
+      console.log(`🔍 BAR_CHART_DEBUG: Initialized month data for: ${monthKey}`);
+    }
+    
+    // Process caseResults to count each result type
+    if (apiTestRun.attributes.caseResults && Array.isArray(apiTestRun.attributes.caseResults)) {
+      console.log(`🔍 BAR_CHART_DEBUG: ✅ VALID caseResults array found with ${apiTestRun.attributes.caseResults.length} results`);
+      
+      apiTestRun.attributes.caseResults.forEach((caseResult: any, caseIndex: number) => {
+        console.log(`🔍 BAR_CHART_DEBUG:   Case result ${caseIndex + 1}:`, caseResult);
+        
+        const rawResult = caseResult.result;
+        console.log(`🔍 BAR_CHART_DEBUG:   Raw result value: ${rawResult} (type: ${typeof rawResult})`);
+        
+        let resultLabel: string;
+        
+        if (typeof rawResult === 'number') {
+          // Use the TEST_RESULTS mapping and convert to lowercase
+          resultLabel = (TEST_RESULTS[rawResult as TestResultId] || 'Unknown').toLowerCase();
+          console.log(`🔍 BAR_CHART_DEBUG:   Converted numeric ${rawResult} to: ${resultLabel}`);
+        } else if (typeof rawResult === 'string') {
+          resultLabel = rawResult.toLowerCase();
+          console.log(`🔍 BAR_CHART_DEBUG:   Using string result: ${resultLabel}`);
+        } else {
+          resultLabel = 'untested';
+          console.log(`🔍 BAR_CHART_DEBUG:   Unknown result type, defaulting to: untested`);
+        }
+        
+        console.log(`🔍 BAR_CHART_DEBUG:   BEFORE increment - ${monthKey} ${resultLabel}:`, monthlyData[monthKey][resultLabel as keyof typeof monthlyData[string]]);
+        
+        // Count each result type
+        switch (resultLabel) {
+          case 'passed':
+            monthlyData[monthKey].passed++;
+            console.log(`🔍 BAR_CHART_DEBUG:   ✅ Incremented passed for ${monthKey}: ${monthlyData[monthKey].passed}`);
+            break;
+          case 'failed':
+            monthlyData[monthKey].failed++;
+            console.log(`🔍 BAR_CHART_DEBUG:   ❌ Incremented failed for ${monthKey}: ${monthlyData[monthKey].failed}`);
+            break;
+          case 'blocked':
+            monthlyData[monthKey].blocked++;
+            console.log(`🔍 BAR_CHART_DEBUG:   🚫 Incremented blocked for ${monthKey}: ${monthlyData[monthKey].blocked}`);
+            break;
+          case 'retest':
+            monthlyData[monthKey].retest++;
+            console.log(`🔍 BAR_CHART_DEBUG:   🔄 Incremented retest for ${monthKey}: ${monthlyData[monthKey].retest}`);
+            break;
+          case 'skipped':
+            monthlyData[monthKey].skipped++;
+            console.log(`🔍 BAR_CHART_DEBUG:   ⏭️ Incremented skipped for ${monthKey}: ${monthlyData[monthKey].skipped}`);
+            break;
+          case 'untested':
+          case 'in progress':
+          case 'unknown':
+            monthlyData[monthKey].untested++;
+            console.log(`🔍 BAR_CHART_DEBUG:   ⚪ Incremented untested (${resultLabel}) for ${monthKey}: ${monthlyData[monthKey].untested}`);
+            break;
+          default:
+            console.log(`🔍 BAR_CHART_DEBUG:   ❓ Unknown result type: ${resultLabel}, adding to untested`);
+            monthlyData[monthKey].untested++;
+        }
+        
+        console.log(`🔍 BAR_CHART_DEBUG:   AFTER increment - ${monthKey} ${resultLabel}:`, monthlyData[monthKey][resultLabel as keyof typeof monthlyData[string]]);
+      });
+      
+      console.log(`🔍 BAR_CHART_DEBUG: Month data AFTER processing all caseResults for ${monthKey}:`, monthlyData[monthKey]);
+    } else {
+      console.log(`🔍 BAR_CHART_DEBUG: ❌ NO VALID caseResults for test run: ${apiTestRun.attributes.name}`);
+      console.log('🔍 BAR_CHART_DEBUG:   caseResults value:', apiTestRun.attributes.caseResults);
+      console.log('🔍 BAR_CHART_DEBUG:   caseResults type:', typeof apiTestRun.attributes.caseResults);
+      console.log('🔍 BAR_CHART_DEBUG:   Is array:', Array.isArray(apiTestRun.attributes.caseResults));
+    }
   });
-
-  // Generate trends data for last 7 days - distribute actual counts
-  const trendsData = [];
-  const basePassedPerDay = Math.floor(passedCount / 7);
-  const baseFailedPerDay = Math.floor(failedCount / 7);
-  const baseBlockedPerDay = Math.floor(blockedCount / 7);
   
-  for (let i = 0; i < 7; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - (6 - i));
+  console.log('🔍 BAR_CHART_DEBUG: FINAL monthly data object before converting to array:', monthlyData);
+  console.log('🔍 BAR_CHART_DEBUG: Monthly data keys:', Object.keys(monthlyData));
+  console.log('🔍 BAR_CHART_DEBUG: Monthly data values:', Object.values(monthlyData));
+  
+  // Convert to array and sort by date
+  const sortedData = Object.values(monthlyData).sort((a, b) => {
+    // Parse month strings like "Dec 24" for sorting
+    const dateA = new Date(`${a.month.split(' ')[0]} 1, 20${a.month.split(' ')[1]}`);
+    const dateB = new Date(`${b.month.split(' ')[0]} 1, 20${b.month.split(' ')[1]}`);
+    return dateA.getTime() - dateB.getTime();
+  });
+  
+  console.log('🔍 BAR_CHART_DEBUG: FINAL SORTED bar chart data:', sortedData);
+  console.log('🔍 BAR_CHART_DEBUG: Data length:', sortedData.length);
+  console.log('🔍 BAR_CHART_DEBUG: Sample data point:', sortedData[0]);
+  
+  return sortedData;
+}
+
+// Generate closed test runs data for bar chart
+function generateClosedTestRunsData(closedTestRuns: any[]): Array<{
+  month: string;
+  total: number;
+}> {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  // Initialize monthly data
+  const monthlyData: { [key: string]: {
+    month: string;
+    passed: number;
+    failed: number;
+    blocked: number;
+    total: number;
+  } } = {};
+  
+  months.forEach(month => {
+    monthlyData[month] = {
+      month,
+      passed: 0,
+      failed: 0,
+      blocked: 0,
+      total: 0
+    };
+  });
+  
+  console.log('📊 Processing', closedTestRuns.length, 'closed test runs for bar chart...');
+  
+  console.log('📊 Processing', closedTestRuns.length, 'closed test runs for monthly data');
+  
+  // Process real closed test runs data
+  closedTestRuns.forEach(testRun => {
+    console.log('📊 Processing closed test run for bar chart:', {
+      name: testRun.name,
+      closedAt: testRun.closedAt,
+      passedCount: testRun.passedCount,
+      failedCount: testRun.failedCount,
+      blockedCount: testRun.blockedCount
+    });
     
-    // Distribute actual counts across days
-    const dailyPassed = basePassedPerDay + (i < (passedCount % 7) ? 1 : 0);
-    const dailyFailed = baseFailedPerDay + (i < (failedCount % 7) ? 1 : 0);
-    const dailyBlocked = baseBlockedPerDay + (i < (blockedCount % 7) ? 1 : 0);
+    const closedDate = testRun.closedAt || testRun.closedDate;
     
-    trendsData.push({
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      passed: Math.max(0, dailyPassed),
-      failed: Math.max(0, dailyFailed),
-      blocked: Math.max(0, dailyBlocked),
-    });
-  }
-
-  // Generate recent executions based on actual counts
-  const recentExecutions = [];
-  const executors = ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson', 'Alex Chen'];
+    if (closedDate) {
+      const monthIndex = closedDate.getMonth();
+      const monthKey = monthNames[monthIndex];
+      
+      if (monthlyData[monthKey]) {
+        monthlyData[monthKey].passed += testRun.passedCount || 0;
+        monthlyData[monthKey].failed += testRun.failedCount || 0;
+        monthlyData[monthKey].blocked += testRun.blockedCount || 0;
+        monthlyData[monthKey].total += testRun.testCasesCount || 0;
+        
+        console.log(`📊 Updated ${monthKey} with:`, {
+          passed: testRun.passedCount || 0,
+          failed: testRun.failedCount || 0,
+          blocked: testRun.blockedCount || 0,
+          total: testRun.testCasesCount || 0
+        });
+        
+        console.log(`📊 Added data for ${monthKey}:`, {
+          passed: testRun.passedCount,
+          failed: testRun.failedCount,
+          blocked: testRun.blockedCount,
+          total: testRun.testCasesCount
+        });
+      }
+    }
+  });
   
-  // Create executions that match our totals
-  const allExecutions = [
-    ...Array(passedCount).fill('passed'),
-    ...Array(failedCount).fill('failed'),
-    ...Array(blockedCount).fill('blocked')
-  ];
+  console.log('📊 Final monthly data for bar chart:', monthlyData);
   
-  // Shuffle the executions
-  for (let i = allExecutions.length - 1; i > 0; i--) {
-    const j = Math.floor(rng.next() * (i + 1));
-    [allExecutions[i], allExecutions[j]] = [allExecutions[j], allExecutions[i]];
-  }
+  // Return in the correct month order
+  return months.map(month => ({
+    month: monthlyData[month].month,
+    total: monthlyData[month].total
+  }));
+}
+
+// Generate line chart data for closed test runs count over time
+export function generateClosedTestRunsLineData(closedTestRuns: any[]): Array<{
+  month: string;
+  value: number;
+}> {
+  console.log('📊 generateClosedTestRunsLineData called with:', closedTestRuns.length, 'closed test runs');
   
-  // Take recent executions (up to 10)
-  const recentCount = Math.min(10, executedCount);
-  for (let i = 0; i < recentCount; i++) {
-    recentExecutions.push({
-      id: `exec-${projectId}-${i + 1}`,
-      testCaseId: `${i + 1}`,
-      testCaseTitle: `Test Case #${i + 1}`,
-      status: allExecutions[i] as 'passed' | 'failed' | 'blocked',
-      executedBy: executors[Math.floor(rng.next() * executors.length)],
-      executedAt: new Date(Date.now() - rng.next() * 7 * 24 * 60 * 60 * 1000),
-      duration: Math.floor(rng.next() * 25) + 5,
+  // Create a map to count test runs by month-year
+  const monthCounts = new Map<string, number>();
+  
+  // Process each closed test run
+  closedTestRuns.forEach(testRun => {
+    console.log('📊 Processing closed test run:', {
+      name: testRun.name,
+      id: testRun.id,
+      closedAt: testRun.closedAt,
+      closedDate: testRun.closedDate
     });
-  }
-
-  // Generate closed test runs data
-  const closedTestRunsData = [];
-  for (let i = 0; i < 6; i++) {
-    const date = new Date();
-    date.setMonth(date.getMonth() - (5 - i));
-    closedTestRunsData.push({
-      month: date.toLocaleDateString('en-US', { month: 'short' }),
-      total: Math.floor(rng.next() * Math.min(testCaseCount, 20)) + 1, // Based on actual test case count
-    });
-  }
-
-  return {
-    passRate,
-    failRate,
-    executionRate,
-    actualPassed: passedCount,
-    actualFailed: failedCount,
-    actualBlocked: blockedCount,
-    trendsData,
-    recentExecutions,
-    closedTestRuns: [],
-    closedTestRunsData
-  };
+    
+    // Use closedAt first, fallback to closedDate
+    const closedDate = testRun.closedAt || testRun.closedDate;
+    
+    if (closedDate) {
+      // Format as MM-YY (e.g., "08-25" for August 2025)
+      const month = String(closedDate.getMonth() + 1).padStart(2, '0'); // getMonth() returns 0-11
+      const year = String(closedDate.getFullYear()).slice(-2); // Get last 2 digits of year
+      const monthKey = `${month}-${year}`;
+      
+      console.log(`📊 Test run "${testRun.name}" closed at:`, closedDate);
+      console.log(`📊 Formatted month key: ${monthKey}`);
+      
+      // Increment count for this month
+      const currentCount = monthCounts.get(monthKey) || 0;
+      monthCounts.set(monthKey, currentCount + 1);
+      
+      console.log(`📊 Updated count for ${monthKey}: ${currentCount + 1}`);
+    } else {
+      console.warn('📊 Test run has no closedAt or closedDate:', testRun.name);
+    }
+  });
+  
+  // Convert to array and sort by month-year
+  const sortedMonths = Array.from(monthCounts.entries())
+    .sort(([a], [b]) => {
+      // Sort by year first, then by month
+      const [monthA, yearA] = a.split('-');
+      const [monthB, yearB] = b.split('-');
+      
+      if (yearA !== yearB) {
+        return parseInt(yearA) - parseInt(yearB);
+      }
+      return parseInt(monthA) - parseInt(monthB);
+    })
+    .map(([monthKey, count]) => ({
+      month: monthKey,
+      value: count
+    }));
+  
+  console.log('📊 Final sorted line chart data:', sortedMonths);
+  
+  return sortedMonths;
 }
 
 // Seeded random number generator for consistent results
@@ -474,4 +979,51 @@ function hashString(str: string): number {
     hash = hash & hash; // Convert to 32-bit integer
   }
   return Math.abs(hash);
+}
+
+// Generate trend data based on real test case creation dates
+function generateTrendData(testCases: TestCase[], totalTestCases: number) {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const currentDate = new Date();
+  const monthlyData: { [key: string]: number } = {};
+  
+  // Initialize last 12 months with zero values
+  const trendData = [];
+  
+  console.log('📈 Generating trend data from', testCases.length, 'test cases');
+  console.log('📈 Test case types found:', testCases.map(tc => tc.type));
+  
+  // Get all unique test case types from the actual data
+  const uniqueTypes = [...new Set(testCases.map(tc => tc.type))];
+  console.log('📈 Unique test case types found:', uniqueTypes);
+  
+  // Initialize last 12 months
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date(currentDate);
+    date.setMonth(date.getMonth() - i);
+    const monthKey = months[date.getMonth()];
+    
+    // Count test cases created up to this month by type
+    const cutoffDate = new Date(date);
+    cutoffDate.setMonth(cutoffDate.getMonth() + 1); // End of this month
+    
+    const testCasesUpToThisMonth = testCases.filter(tc => tc.createdAt <= cutoffDate);
+    
+    // Build trend data object dynamically based on actual types
+    const monthData: any = {
+      month: monthKey,
+      date: date.toISOString().split('T')[0]
+    };
+    monthlyData[monthKey] = 0;
+    
+    // Always include total
+    monthData.Total = testCasesUpToThisMonth.length;
+    
+    console.log(`📈 Month ${monthKey}:`, monthData);
+    
+    trendData.push(monthData);
+  }
+  
+  console.log('📈 Generated real trend data based on test case creation dates:', trendData);
+  return trendData;
 }
