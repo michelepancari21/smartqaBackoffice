@@ -28,6 +28,8 @@ const TestPlanSelector: React.FC<TestPlanSelectorProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasLoadedRef = useRef(false);
+  const isLoadingRef = useRef(false);
 
   const { 
     testPlans, 
@@ -60,17 +62,49 @@ const TestPlanSelector: React.FC<TestPlanSelectorProps> = ({
       if (debouncedSearchTerm.trim()) {
         searchTestPlans(debouncedSearchTerm);
       } else {
-        fetchTestPlans(1);
+        loadAllTestPlans();
       }
     }
   }, [debouncedSearchTerm, isOpen, searchTestPlans, fetchTestPlans]);
 
-  // Load test plans when dropdown opens
-  useEffect(() => {
-    if (isOpen && testPlans.length === 0 && !loading) {
-      fetchTestPlans(1);
+  // Load all test plans efficiently when dropdown opens
+  const loadAllTestPlans = async () => {
+    if (hasLoadedRef.current || isLoadingRef.current) {
+      return;
     }
-  }, [isOpen, testPlans.length, loading, fetchTestPlans]);
+
+    try {
+      isLoadingRef.current = true;
+      console.log('📋 Loading test plans - making first request...');
+      
+      // Make first request to get total count
+      await fetchTestPlans(1);
+      
+      // Check if we got any data
+      if (testPlans.length === 0) {
+        console.log('📋 No test plans found - stopping requests');
+        hasLoadedRef.current = true;
+        return;
+      }
+      
+      console.log('📋 Found test plans, checking for additional pages...');
+      // If there are more pages, load them
+      // This will be handled by the useTestPlans hook pagination logic
+      
+      hasLoadedRef.current = true;
+    } catch (error) {
+      console.error('📋 Failed to load test plans:', error);
+      hasLoadedRef.current = true; // Mark as loaded to prevent infinite retries
+    } finally {
+      isLoadingRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && !hasLoadedRef.current && !isLoadingRef.current) {
+      loadAllTestPlans();
+    }
+  }, [isOpen]);
 
   // Filter test plans based on search term (client-side filtering for better UX)
   const filteredTestPlans = testPlans.filter(testPlan =>

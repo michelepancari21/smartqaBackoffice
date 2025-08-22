@@ -13,6 +13,8 @@ export const useTestPlans = (projectId?: string | null) => {
     itemsPerPage: 30,
     totalPages: 1
   });
+  const hasLoadedRef = useRef(false);
+  const isLoadingRef = useRef(false);
 
   // Use ref to track changes without triggering re-renders
   const previousProjectId = useRef<string | null>(null);
@@ -21,7 +23,14 @@ export const useTestPlans = (projectId?: string | null) => {
   const fetchTestPlans = useCallback(async (page: number = 1, targetProjectId?: string) => {
     const useProjectId = targetProjectId || projectId;
     
+    // Prevent multiple simultaneous requests
+    if (isLoadingRef.current) {
+      console.log('📋 Already loading test plans, skipping request');
+      return;
+    }
+
     try {
+      isLoadingRef.current = true;
       setLoading(true);
       setError(null);
       
@@ -44,6 +53,12 @@ export const useTestPlans = (projectId?: string | null) => {
         itemsPerPage: 30
       };
       
+      // If no data found on first page, mark as loaded to prevent further requests
+      if (page === 1 && responseData.length === 0) {
+        console.log('📋 No test plans found on first page - marking as loaded');
+        hasLoadedRef.current = true;
+      }
+      
       const transformedTestPlans = responseData.map(apiTestPlan => 
         testPlansApiService.transformApiTestPlan(apiTestPlan)
       );
@@ -58,13 +73,24 @@ export const useTestPlans = (projectId?: string | null) => {
         totalPages: Math.ceil(responseMeta.totalItems / responseMeta.itemsPerPage)
       });
       
+      // Mark as loaded after successful first page
+      if (page === 1) {
+        hasLoadedRef.current = true;
+      }
+      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch test plans';
       setError(errorMessage);
       toast.error(errorMessage);
       console.error('❌ Error fetching test plans:', err);
+      
+      // Mark as loaded even on error to prevent infinite retries
+      if (page === 1) {
+        hasLoadedRef.current = true;
+      }
     } finally {
       setLoading(false);
+      isLoadingRef.current = false;
     }
   }, [projectId]);
 

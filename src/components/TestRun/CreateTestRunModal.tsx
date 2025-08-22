@@ -361,7 +361,6 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
                 Configurations
               </label>
               <ConfigurationSelector
-                availableConfigurations={configurations}
                 selectedConfigurations={formData.configurations}
                 onConfigurationsChange={(selectedConfigurations) => 
                   setFormData(prev => ({ ...prev, configurations: selectedConfigurations }))

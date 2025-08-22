@@ -36,25 +36,25 @@ interface EditTestRunModalProps {
 }
 
 const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
-                                                             isOpen,
-                                                             onClose,
-                                                             onSubmit,
-                                                             isSubmitting,
-                                                             testRun,
-                                                             availableTags,
-                                                             onCreateTag,
-                                                             tagsLoading
-                                                           }) => {
+  isOpen,
+  onClose,
+  onSubmit,
+  isSubmitting,
+  testRun,
+  availableTags,
+  onCreateTag,
+  tagsLoading
+}) => {
   const { state: authState } = useAuth();
   const { users, loading: usersLoading } = useUsers();
   const { getSelectedProject, state: appState, createConfiguration, loadConfigurations } = useApp();
   const selectedProject = getSelectedProject();
-
+  
   // Fetch all test cases for the project
-  const {
-    allTestCases,
+  const { 
+    allTestCases, 
     loading: testCasesLoading,
-    fetchAllTestCasesForProject
+    fetchAllTestCasesForProject 
   } = useTestCases(selectedProject?.id, null, undefined, true);
 
   const [formData, setFormData] = useState({
@@ -74,10 +74,10 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
   const [isLoadingTags, setIsLoadingTags] = useState(false);
   const [existingConfigurations, setExistingConfigurations] = useState<Configuration[]>([]);
   const [isLoadingConfigurations, setIsLoadingConfigurations] = useState(false);
-
+  
   // Use configurations from app context and load them if needed
   const configurations = appState.configurations;
-
+  
   // Load configurations when modal opens if not already loaded
   useEffect(() => {
     if (isOpen && configurations.length === 0 && !appState.isLoadingConfigurations) {
@@ -85,7 +85,7 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
       loadConfigurations();
     }
   }, [isOpen, configurations.length, appState.isLoadingConfigurations]);
-
+  
 
   const stateOptions = [
     { value: 1, label: 'New' },
@@ -108,13 +108,13 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
       console.log('📝 Populating edit form with test run data:', testRun);
       console.log('📋 Test run test case IDs:', testRun.testCaseIds);
       console.log('📋 Available test cases count:', allTestCases.length);
-
+      
       // Load the assigned user from relationships.user (not creator)
       loadAssignedUser(testRun.id);
-
+      
       // Load the test plan from relationships.test_plans
       loadTestPlan(testRun.id);
-
+      
       setFormData({
         name: testRun.name,
         description: testRun.description || '',
@@ -125,13 +125,13 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
         state: testRun.state, // Use the actual state number from the test run
         tags: [] // Will be populated from existing tags
       });
-
+      
       console.log('📋 Set formData.testCaseIds to:', testRun.testCaseIds);
-
+      
       // Load existing tags and configurations by calling the API
       loadExistingTags(testRun.id);
       loadExistingConfigurations(testRun.id);
-
+      
       console.log('📋 Setting existing test case IDs:', testRun.testCaseIds);
     } else if (isOpen && !testRun) {
       // Reset form for new test run
@@ -143,7 +143,7 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
         month: '2-digit',
         year: 'numeric'
       });
-
+      
       setFormData({
         name: `Test Run-${dateStr}`,
         description: '',
@@ -162,32 +162,32 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
     try {
       setIsLoadingTags(true);
       console.log('🏷️ Loading existing tags for test run:', testRunId);
-
+      
       // Get test run details with tags included
       const response = await testRunsApiService.getTestRun(testRunId);
       console.log('🏷️ Test run response:', response);
-
+      
       // Extract tag IDs from relationships
       const tagRelationships = response.data.relationships?.tags?.data || [];
       console.log('🏷️ Tag relationships found:', tagRelationships);
-
+      
       if (tagRelationships.length > 0) {
         // Extract tag IDs and find corresponding tags
         const existingTagsData: Tag[] = [];
-
+        
         for (const tagRef of tagRelationships) {
           const tagId = tagRef.id.split('/').pop();
           console.log('🏷️ Looking for tag with ID:', tagId);
-
+          
           // First try to find in available tags
           let foundTag = availableTags.find(tag => tag.id === tagId);
-
+          
           // If not found in available tags, check if it's in the included data
           if (!foundTag && response.included) {
-            const includedTag = response.included.find(item =>
-                item.type === 'Tag' && item.attributes.id.toString() === tagId
+            const includedTag = response.included.find(item => 
+              item.type === 'Tag' && item.attributes.id.toString() === tagId
             );
-
+            
             if (includedTag) {
               foundTag = {
                 id: includedTag.attributes.id.toString(),
@@ -196,7 +196,7 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
               console.log('🏷️ Found tag in included data:', foundTag);
             }
           }
-
+          
           if (foundTag) {
             existingTagsData.push(foundTag);
             console.log('🏷️ Added existing tag:', foundTag);
@@ -204,14 +204,14 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
             console.warn('🏷️ Tag not found for ID:', tagId);
           }
         }
-
+        
         setExistingTags(existingTagsData);
         console.log('✅ Final existing tags loaded:', existingTagsData);
       } else {
         console.log('🏷️ No tag relationships found');
         setExistingTags([]);
       }
-
+      
     } catch (error) {
       console.error('❌ Failed to load existing tags:', error);
       setExistingTags([]);
@@ -225,32 +225,32 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
     try {
       setIsLoadingConfigurations(true);
       console.log('⚙️ Calling GET /test_runs/' + testRunId + ' to load existing configurations');
-
+      
       // Call GET /test_runs/{id} with configurations included
       const response = await testRunsApiService.getTestRun(testRunId);
       console.log('⚙️ GET /test_runs/' + testRunId + ' response:', response);
       console.log('⚙️ Relationships:', response.data.relationships);
       console.log('⚙️ Included data:', response.included);
-
+      
       // Extract configuration IDs from relationships
       const configurationRelationships = response.data.relationships?.configurations?.data || [];
       console.log('⚙️ Found', configurationRelationships.length, 'configuration relationships:', configurationRelationships);
-
+      
       if (configurationRelationships.length > 0) {
         const existingConfigurationsData: Configuration[] = [];
-
+        
         for (const configRef of configurationRelationships) {
           const configId = configRef.id.split('/').pop();
           console.log('⚙️ Processing configuration ID:', configId);
-
+          
           // Look for configuration in included data first
           let foundConfig: Configuration | undefined;
-
+          
           if (response.included) {
-            const includedConfig = response.included.find(item =>
-                item.type === 'Configuration' && item.attributes.id.toString() === configId
+            const includedConfig = response.included.find(item => 
+              item.type === 'Configuration' && item.attributes.id.toString() === configId
             );
-
+            
             if (includedConfig) {
               foundConfig = {
                 id: includedConfig.attributes.id.toString(),
@@ -263,7 +263,7 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
           } else {
             console.log('⚙️ No included data in response');
           }
-
+          
           // If not found in included data, try to find in available configurations
           if (!foundConfig) {
             foundConfig = configurations.find(config => config.id === configId);
@@ -271,7 +271,7 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
               console.log('⚙️ Found configuration in available configurations:', foundConfig);
             }
           }
-
+          
           if (foundConfig) {
             existingConfigurationsData.push(foundConfig);
             console.log('⚙️ ✅ Added existing configuration:', foundConfig);
@@ -284,14 +284,14 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
             });
           }
         }
-
+        
         setExistingConfigurations(existingConfigurationsData);
         console.log('⚙️ ✅ Final existing configurations set:', existingConfigurationsData);
       } else {
         console.log('⚙️ No configuration relationships found in test run');
         setExistingConfigurations([]);
       }
-
+      
     } catch (error) {
       console.error('⚙️ ❌ Failed to load existing configurations:', error);
       setExistingConfigurations([]);
@@ -304,25 +304,25 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
   const loadAssignedUser = async (testRunId: string) => {
     try {
       console.log('👤 Loading assigned user for test run:', testRunId);
-
+      
       // Get test run details to extract assigned user from relationships.user
       const response = await testRunsApiService.getTestRun(testRunId);
       console.log('👤 Test run response for assigned user:', response);
-
+      
       // Extract user ID from relationships.user
       const userRelationship = response.data.relationships?.user?.data;
       console.log('👤 User relationship found:', userRelationship);
-
+      
       if (userRelationship) {
         const assignedUserId = userRelationship.id.split('/').pop();
         console.log('👤 Extracted assigned user ID:', assignedUserId);
-
+        
         // Set the assigned user in form data
         setFormData(prev => ({
           ...prev,
           assignedTo: assignedUserId || ''
         }));
-
+        
         console.log('✅ Set assigned user ID in form:', assignedUserId);
       } else {
         console.log('👤 No user relationship found in test run');
@@ -331,7 +331,7 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
           assignedTo: ''
         }));
       }
-
+      
     } catch (error) {
       console.error('❌ Failed to load assigned user:', error);
       setFormData(prev => ({
@@ -345,25 +345,25 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
   const loadTestPlan = async (testRunId: string) => {
     try {
       console.log('📅 Loading test plan for test run:', testRunId);
-
+      
       // Get test run details to extract test plan from relationships.test_plans
       const response = await testRunsApiService.getTestRun(testRunId);
       console.log('📅 Test run response for test plan:', response);
-
+      
       // Extract test plan ID from relationships.testPlans
       const testPlanRelationship = response.data.relationships?.testPlans?.data;
       console.log('📅 Test plan relationship found:', testPlanRelationship);
-
+      
       if (testPlanRelationship) {
-        const testPlanId = testPlanRelationship.id.split('/').pop();
+        const testPlanId = testPlanRelationship?.id?.split('/').pop();
         console.log('📅 Extracted test plan ID:', testPlanId);
-
+        
         // Set the test plan in form data
         setFormData(prev => ({
           ...prev,
           testPlanId: testPlanId || ''
         }));
-
+        
         console.log('✅ Set test plan ID in form:', testPlanId);
       } else {
         console.log('📅 No test plan relationship found in test run');
@@ -372,7 +372,7 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
           testPlanId: ''
         }));
       }
-
+      
     } catch (error) {
       console.error('❌ Failed to load test plan:', error);
       setFormData(prev => ({
@@ -409,8 +409,8 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
     setFormData(prev => ({
       ...prev,
       testCaseIds: prev.testCaseIds.includes(testCaseId)
-          ? prev.testCaseIds.filter(id => id !== testCaseId)
-          : [...prev.testCaseIds, testCaseId]
+        ? prev.testCaseIds.filter(id => id !== testCaseId)
+        : [...prev.testCaseIds, testCaseId]
     }));
   };
 
@@ -423,14 +423,14 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
 
   // Filter test cases based on search
   const filteredTestCases = allTestCases.filter(testCase =>
-      testCase.title.toLowerCase().includes(testCaseSearch.toLowerCase()) ||
-      testCase.id.toLowerCase().includes(testCaseSearch.toLowerCase())
+    testCase.title.toLowerCase().includes(testCaseSearch.toLowerCase()) ||
+    testCase.id.toLowerCase().includes(testCaseSearch.toLowerCase())
   ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-  const selectedTestCases = allTestCases.filter(testCase =>
-      formData.testCaseIds.includes(testCase.id)
+  const selectedTestCases = allTestCases.filter(testCase => 
+    formData.testCaseIds.includes(testCase.id)
   ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
+  
   console.log('📋 Current formData.testCaseIds:', formData.testCaseIds);
   console.log('📋 All test cases:', allTestCases.map(tc => ({ id: tc.id, title: tc.title })));
   console.log('📋 Selected test cases:', selectedTestCases.map(tc => ({ id: tc.id, title: tc.title })));
@@ -438,8 +438,8 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
     setFormData(prev => ({
       ...prev,
       configurations: prev.configurations.includes(config)
-          ? prev.configurations.filter(c => c !== config)
-          : [...prev.configurations, config]
+        ? prev.configurations.filter(c => c !== config)
+        : [...prev.configurations, config]
     }));
   };
 
@@ -468,7 +468,7 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     // Handle new configurations creation first
     const processedConfigurations = [];
     for (const config of formData.configurations || []) {
@@ -485,13 +485,13 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
         processedConfigurations.push(config);
       }
     }
-
+    
     // Combine existing tags with new tags from form
     const allTags = [...existingTags, ...formData.tags];
-
+    
     // Combine existing configurations with new configurations from form
     const allConfigurations = [...existingConfigurations, ...processedConfigurations];
-
+    
     const submitData = {
       name: formData.name,
       description: formData.description,
@@ -502,398 +502,392 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
       tags: allTags,
       testPlanId: formData.testPlanId
     };
-
+    
     await onSubmit(submitData);
   };
 
   return (
-      <Modal
-          isOpen={isOpen}
-          onClose={onClose}
-          title="Edit Test Run"
-          size="lg"
-      >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Test Run Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Test Run Name *
-            </label>
-            <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
-                required
-                disabled={isSubmitting}
-                placeholder="Enter test run name"
-            />
-          </div>
+    <Modal 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title="Edit Test Run"
+      size="lg"
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Test Run Name */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Test Run Name *
+          </label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => handleInputChange('name', e.target.value)}
+            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+            required
+            disabled={isSubmitting}
+            placeholder="Enter test run name"
+          />
+        </div>
 
-          {/* Test Cases Section */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Test Cases
-            </label>
-            <div className="space-y-4">
-              {/* Selected Test Cases */}
-              {selectedTestCases.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-400 mb-2">
-                      Selected Test Cases ({selectedTestCases.length})
-                    </h4>
-                    <div className="space-y-2 max-h-40 overflow-y-auto" style={{ overflowAnchor: 'none' }}>
-                      {selectedTestCases.map((testCase) => (
-                          <div key={`selected-${testCase.id}`} className="flex items-center justify-between bg-slate-700 border border-slate-600 rounded-lg p-3 min-w-0">
-                            <div className="flex-1 min-w-0 pr-3">
-                              <span className="text-white text-sm font-medium">{testCase.title}</span>
-                              <p className="text-xs text-gray-400">TC-{testCase.id}</p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => removeTestCase(testCase.id)}
-                                className="text-gray-400 hover:text-red-400 transition-colors flex-shrink-0"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                      ))}
-                    </div>
-                  </div>
-              )}
-
-              {/* Test Case Selector */}
+        {/* Test Cases Section */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Test Cases
+          </label>
+          <div className="space-y-4">
+            {/* Selected Test Cases */}
+            {selectedTestCases.length > 0 && (
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-medium text-gray-400">
-                    Add Test Cases
-                  </h4>
-                  <button
-                      type="button"
-                      onClick={() => setShowTestCaseSelector(!showTestCaseSelector)}
-                      className="text-cyan-400 hover:text-cyan-300 text-sm"
-                  >
-                    {showTestCaseSelector ? 'Hide' : 'Show'} Available Test Cases
-                  </button>
-                </div>
-
-                {showTestCaseSelector && (
-                    <div className="bg-slate-800 border border-slate-600 rounded-lg p-4">
-                      {/* Search */}
-                      <div className="relative mb-3">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                        <input
-                            type="text"
-                            placeholder="Search test cases..."
-                            value={testCaseSearch}
-                            onChange={(e) => setTestCaseSearch(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm"
-                        />
+                <h4 className="text-sm font-medium text-gray-400 mb-2">
+                  Selected Test Cases ({selectedTestCases.length})
+                </h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto" style={{ overflowAnchor: 'none' }}>
+                  {selectedTestCases.map((testCase) => (
+                    <div key={`selected-${testCase.id}`} className="flex items-center justify-between bg-slate-700 border border-slate-600 rounded-lg p-3 min-w-0">
+                      <div className="flex-1 min-w-0 pr-3">
+                        <span className="text-white text-sm font-medium">{testCase.title}</span>
+                        <p className="text-xs text-gray-400">TC-{testCase.id}</p>
                       </div>
-
-                      {/* Test Cases List */}
-                      {testCasesLoading ? (
-                          <div className="flex items-center justify-center py-4">
-                            <Loader className="w-4 h-4 mr-2 animate-spin text-cyan-400" />
-                            <span className="text-gray-400 text-sm">Loading test cases...</span>
-                          </div>
-                      ) : (
-                          <div className="space-y-2 max-h-60 overflow-y-auto" style={{ overflowAnchor: 'none' }}>
-                            {filteredTestCases
-                                .filter(testCase => !formData.testCaseIds.includes(testCase.id))
-                                .map((testCase) => (
-                                    <button
-                                        key={`available-${testCase.id}`}
-                                        type="button"
-                                        onClick={() => handleTestCaseToggle(testCase.id)}
-                                        className="w-full text-left bg-slate-700 border border-slate-600 rounded-lg p-3 text-white hover:bg-slate-600 transition-colors min-w-0"
-                                    >
-                                      <div className="flex items-center justify-between min-w-0">
-                                        <div className="flex-1 min-w-0 pr-3">
-                                          <span className="text-sm font-medium block truncate">{testCase.title}</span>
-                                          <p className="text-xs text-gray-400">TC-{testCase.id}</p>
-                                        </div>
-                                        <Plus className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-                                      </div>
-                                    </button>
-                                ))}
-
-                            {filteredTestCases.filter(testCase => !formData.testCaseIds.includes(testCase.id)).length === 0 && (
-                                <div className="text-center py-4 text-gray-400 text-sm">
-                                  {testCaseSearch ? 'No test cases found matching your search' : 'All available test cases are already selected'}
-                                </div>
-                            )}
-                          </div>
+                      <button
+                        type="button"
+                        onClick={() => removeTestCase(testCase.id)}
+                        className="text-gray-400 hover:text-red-400 transition-colors flex-shrink-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Test Case Selector */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium text-gray-400">
+                  Add Test Cases
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setShowTestCaseSelector(!showTestCaseSelector)}
+                  className="text-cyan-400 hover:text-cyan-300 text-sm"
+                >
+                  {showTestCaseSelector ? 'Hide' : 'Show'} Available Test Cases
+                </button>
+              </div>
+              
+              {showTestCaseSelector && (
+                <div className="bg-slate-800 border border-slate-600 rounded-lg p-4">
+                  {/* Search */}
+                  <div className="relative mb-3">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Search test cases..."
+                      value={testCaseSearch}
+                      onChange={(e) => setTestCaseSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm"
+                    />
+                  </div>
+                  
+                  {/* Test Cases List */}
+                  {testCasesLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader className="w-4 h-4 mr-2 animate-spin text-cyan-400" />
+                      <span className="text-gray-400 text-sm">Loading test cases...</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto" style={{ overflowAnchor: 'none' }}>
+                      {filteredTestCases
+                        .filter(testCase => !formData.testCaseIds.includes(testCase.id))
+                        .map((testCase) => (
+                          <button
+                            key={`available-${testCase.id}`}
+                            type="button"
+                            onClick={() => handleTestCaseToggle(testCase.id)}
+                            className="w-full text-left bg-slate-700 border border-slate-600 rounded-lg p-3 text-white hover:bg-slate-600 transition-colors min-w-0"
+                          >
+                            <div className="flex items-center justify-between min-w-0">
+                              <div className="flex-1 min-w-0 pr-3">
+                                <span className="text-sm font-medium block truncate">{testCase.title}</span>
+                                <p className="text-xs text-gray-400">TC-{testCase.id}</p>
+                              </div>
+                              <Plus className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                            </div>
+                          </button>
+                        ))}
+                      
+                      {filteredTestCases.filter(testCase => !formData.testCaseIds.includes(testCase.id)).length === 0 && (
+                        <div className="text-center py-4 text-gray-400 text-sm">
+                          {testCaseSearch ? 'No test cases found matching your search' : 'All available test cases are already selected'}
+                        </div>
                       )}
                     </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* Two Column Layout */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Column */}
-            <div className="space-y-6">
-              {/* Configurations */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Configurations
-                </label>
-
-                {/* Loading existing configurations */}
-                {isLoadingConfigurations && (
-                    <div className="flex items-center text-gray-400 text-sm mb-3">
-                      <Loader className="w-4 h-4 mr-2 animate-spin" />
-                      Loading existing configurations...
-                    </div>
-                )}
-
-                {/* Display existing configurations */}
-                {!isLoadingConfigurations && existingConfigurations.length > 0 && (
-                    <div className="mb-3">
-                      <h4 className="text-sm font-medium text-gray-400 mb-2">
-                        Current Configurations ({existingConfigurations.length})
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {existingConfigurations.map((config) => (
-                            <span
-                                key={config.id}
-                                className="inline-flex items-center px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-sm text-blue-400"
-                            >
+        {/* Two Column Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left Column */}
+          <div className="space-y-6">
+            {/* Configurations */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Configurations
+              </label>
+              
+              {/* Loading existing configurations */}
+              {isLoadingConfigurations && (
+                <div className="flex items-center text-gray-400 text-sm mb-3">
+                  <Loader className="w-4 h-4 mr-2 animate-spin" />
+                  Loading existing configurations...
+                </div>
+              )}
+              
+              {/* Display existing configurations */}
+              {!isLoadingConfigurations && existingConfigurations.length > 0 && (
+                <div className="mb-3">
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">
+                    Current Configurations ({existingConfigurations.length})
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {existingConfigurations.map((config) => (
+                      <span
+                        key={config.id}
+                        className="inline-flex items-center px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-sm text-blue-400"
+                      >
                         <Settings className="w-3 h-3 mr-1" />
-                              {config.label}
-                              <button
-                                  type="button"
-                                  onClick={() => removeExistingConfiguration(config)}
-                                  className="ml-2 text-blue-400 hover:text-blue-300 transition-colors"
-                                  disabled={isSubmitting}
-                                  title="Remove configuration"
-                              >
+                        {config.label}
+                        <button
+                          type="button"
+                          onClick={() => removeExistingConfiguration(config)}
+                          className="ml-2 text-blue-400 hover:text-blue-300 transition-colors"
+                          disabled={isSubmitting}
+                          title="Remove configuration"
+                        >
                           <X className="w-3 h-3" />
                         </button>
                       </span>
-                        ))}
-                      </div>
-                    </div>
-                )}
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <ConfigurationSelector
+                selectedConfigurations={formData.configurations}
+                onConfigurationsChange={(selectedConfigurations) => 
+                  setFormData(prev => ({ ...prev, configurations: selectedConfigurations }))
+                }
+                onCreateConfiguration={handleCreateConfiguration}
+                disabled={isSubmitting}
+                placeholder="Add new configurations..."
+              />
+            </div>
 
-                <ConfigurationSelector
-                    availableConfigurations={configurations}
-                    selectedConfigurations={formData.configurations}
-                    onConfigurationsChange={(selectedConfigurations) =>
-                        setFormData(prev => ({ ...prev, configurations: selectedConfigurations }))
-                    }
-                    onCreateConfiguration={handleCreateConfiguration}
-                    disabled={isSubmitting}
-                    placeholder="Add new configurations..."
-                />
-              </div>
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Description
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                rows={4}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none"
+                disabled={isSubmitting}
+                placeholder="Write in brief about the test run"
+              />
+            </div>
 
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Description
-                </label>
-                <textarea
-                    value={formData.description}
-                    onChange={(e) => handleInputChange('description', e.target.value)}
-                    rows={4}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none"
-                    disabled={isSubmitting}
-                    placeholder="Write in brief about the test run"
-                />
-              </div>
-
-              {/* Assign Run */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Assign Run
-                </label>
-                {usersLoading ? (
-                    <div className="flex items-center text-gray-400 text-sm">
-                      <Loader className="w-4 h-4 mr-2 animate-spin" />
-                      Loading users...
-                    </div>
-                ) : (
-                    <select
-                        value={formData.assignedTo}
-                        onChange={(e) => handleInputChange('assignedTo', e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
-                        disabled={isSubmitting}
-                        required
-                    >
-                      <option value="">Select assignee</option>
-                      {users.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {user.name} ({user.email})
-                          </option>
-                      ))}
-                    </select>
-                )}
-              </div>
-
-              {/* State */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  State
-                </label>
+            {/* Assign Run */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Assign Run
+              </label>
+              {usersLoading ? (
+                <div className="flex items-center text-gray-400 text-sm">
+                  <Loader className="w-4 h-4 mr-2 animate-spin" />
+                  Loading users...
+                </div>
+              ) : (
                 <select
-                    value={formData.state}
-                    onChange={(e) => handleInputChange('state', parseInt(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
-                    disabled={isSubmitting}
+                  value={formData.assignedTo}
+                  onChange={(e) => handleInputChange('assignedTo', e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                  disabled={isSubmitting}
+                  required
                 >
-                  {stateOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
+                  <option value="">Select assignee</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.email})
+                    </option>
                   ))}
                 </select>
-                {testRun?.state === 6 && (
-                    <p className="text-xs text-orange-400 mt-1">
-                      Note: This test run is closed. You can still update its state if needed.
-                    </p>
-                )}
-              </div>
+              )}
             </div>
 
-            {/* Right Column */}
-            <div className="space-y-6">
-              {/* Test Plan */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Test Plan
-                </label>
-                <TestPlanSelector
-                    selectedTestPlanId={formData.testPlanId}
-                    onTestPlanChange={(testPlanId) => handleInputChange('testPlanId', testPlanId)}
-                    disabled={isSubmitting}
-                    placeholder="Select test plan..."
-                    projectId={selectedProject?.id}
-                />
-              </div>
+            {/* State */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                State
+              </label>
+              <select
+                value={formData.state}
+                onChange={(e) => handleInputChange('state', parseInt(e.target.value))}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                disabled={isSubmitting}
+              >
+                {stateOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-              {/* Tags */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Tags
-                </label>
+          {/* Right Column */}
+          <div className="space-y-6">
+            {/* Test Plan */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Test Plan
+              </label>
+              <TestPlanSelector
+                selectedTestPlanId={formData.testPlanId}
+                onTestPlanChange={(testPlanId) => handleInputChange('testPlanId', testPlanId)}
+                disabled={isSubmitting}
+                placeholder="Select test plan..."
+                projectId={selectedProject?.id}
+              />
+            </div>
 
-                {/* Loading existing tags */}
-                {isLoadingTags && (
-                    <div className="flex items-center text-gray-400 text-sm mb-3">
-                      <Loader className="w-4 h-4 mr-2 animate-spin" />
-                      Loading existing tags...
-                    </div>
-                )}
-
-                {/* Display existing tags */}
-                {!isLoadingTags && existingTags.length > 0 && (
-                    <div className="mb-3">
-                      <h4 className="text-sm font-medium text-gray-400 mb-2">
-                        Current Tags ({existingTags.length})
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {existingTags.map((tag) => (
-                            <span
-                                key={tag.id}
-                                className="inline-flex items-center px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 rounded-full text-sm text-cyan-400"
-                            >
+            {/* Tags */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Tags
+              </label>
+              
+              {/* Loading existing tags */}
+              {isLoadingTags && (
+                <div className="flex items-center text-gray-400 text-sm mb-3">
+                  <Loader className="w-4 h-4 mr-2 animate-spin" />
+                  Loading existing tags...
+                </div>
+              )}
+              
+              {/* Display existing tags */}
+              {!isLoadingTags && existingTags.length > 0 && (
+                <div className="mb-3">
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">
+                    Current Tags ({existingTags.length})
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {existingTags.map((tag) => (
+                      <span
+                        key={tag.id}
+                        className="inline-flex items-center px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 rounded-full text-sm text-cyan-400"
+                      >
                         <TagIcon className="w-3 h-3 mr-1" />
-                              {tag.label}
-                              <button
-                                  type="button"
-                                  onClick={() => removeExistingTag(tag)}
-                                  className="ml-2 text-cyan-400 hover:text-cyan-300 transition-colors"
-                                  disabled={isSubmitting}
-                                  title="Remove tag"
-                              >
+                        {tag.label}
+                        <button
+                          type="button"
+                          onClick={() => removeExistingTag(tag)}
+                          className="ml-2 text-cyan-400 hover:text-cyan-300 transition-colors"
+                          disabled={isSubmitting}
+                          title="Remove tag"
+                        >
                           <X className="w-3 h-3" />
                         </button>
                       </span>
-                        ))}
-                      </div>
-                    </div>
-                )}
-
-                <TagSelector
-                    availableTags={availableTags}
-                    selectedTags={formData.tags}
-                    onTagsChange={(selectedTags) => handleInputChange('tags', selectedTags)}
-                    onCreateTag={handleCreateTag}
-                    disabled={isSubmitting || tagsLoading}
-                    placeholder="Add new tags..."
-                />
-              </div>
-
-              {/* Setup your requirement management tool */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Setup your requirement management tool
-                </label>
-                <div className="flex space-x-3">
-                  <button
-                      type="button"
-                      className="flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
-                      disabled={isSubmitting}
-                  >
-                    <div className="w-4 h-4 mr-2 bg-white rounded-sm flex items-center justify-center">
-                      <span className="text-blue-600 text-xs font-bold">J</span>
-                    </div>
-                    Jira
-                  </button>
-                  <button
-                      type="button"
-                      className="flex items-center px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors text-sm font-medium"
-                      disabled={isSubmitting}
-                  >
-                    <div className="w-4 h-4 mr-2 bg-white rounded-sm flex items-center justify-center">
-                      <span className="text-cyan-600 text-xs font-bold">A</span>
-                    </div>
-                    Azure
-                  </button>
-                  <button
-                      type="button"
-                      className="flex items-center px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm font-medium"
-                      disabled={isSubmitting}
-                  >
-                    <div className="w-4 h-4 mr-2 bg-white rounded-sm flex items-center justify-center">
-                      <span className="text-red-500 text-xs font-bold">A</span>
-                    </div>
-                    Asana
-                  </button>
+                    ))}
+                  </div>
                 </div>
+              )}
+              
+              <TagSelector
+                availableTags={availableTags}
+                selectedTags={formData.tags}
+                onTagsChange={(selectedTags) => handleInputChange('tags', selectedTags)}
+                onCreateTag={handleCreateTag}
+                disabled={isSubmitting || tagsLoading}
+                placeholder="Add new tags..."
+              />
+            </div>
+
+            {/* Setup your requirement management tool */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Setup your requirement management tool
+              </label>
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  className="flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  disabled={isSubmitting}
+                >
+                  <div className="w-4 h-4 mr-2 bg-white rounded-sm flex items-center justify-center">
+                    <span className="text-blue-600 text-xs font-bold">J</span>
+                  </div>
+                  Jira
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  disabled={isSubmitting}
+                >
+                  <div className="w-4 h-4 mr-2 bg-white rounded-sm flex items-center justify-center">
+                    <span className="text-cyan-600 text-xs font-bold">A</span>
+                  </div>
+                  Azure
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm font-medium"
+                  disabled={isSubmitting}
+                >
+                  <div className="w-4 h-4 mr-2 bg-white rounded-sm flex items-center justify-center">
+                    <span className="text-red-500 text-xs font-bold">A</span>
+                  </div>
+                  Asana
+                </button>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="flex justify-end space-x-3 pt-6 border-t border-slate-700">
-            <Button
-                variant="secondary"
-                onClick={onClose}
-                disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-                type="submit"
-                disabled={isSubmitting}
-                icon={Save}
-            >
-              {isSubmitting ? (
-                  <>
-                    <Loader className="w-4 h-4 mr-2 animate-spin" />
-                    Updating...
-                  </>
-              ) : (
-                  'Update'
-              )}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        {/* Footer */}
+        <div className="flex justify-end space-x-3 pt-6 border-t border-slate-700">
+          <Button 
+            variant="secondary" 
+            onClick={onClose} 
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={isSubmitting}
+            icon={Save}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader className="w-4 h-4 mr-2 animate-spin" />
+                Updating...
+              </>
+            ) : (
+              'Update'
+            )}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 };
 
