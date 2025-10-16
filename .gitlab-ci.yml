@@ -4,7 +4,7 @@ stages:
 
 variables:
   AWS_DEFAULT_REGION: eu-west-1
-  BUILD_DIR: "dist"  # Ajuste selon ton dossier build (dist, build, public...)
+  BUILD_DIR: "dist" # Ajuste selon ton dossier build (dist, build, public...)
 
 ####### RULES FOR ALL INFRA JOBS #######
 .deploy_rules: &deploy_rules
@@ -62,7 +62,7 @@ build_frontend:
   stage: build
   script:
     - npm install
-    - npm run build --mode $STAGE
+    - npm run build-$STAGE
   artifacts:
     paths:
       - ${BUILD_DIR}/
@@ -74,11 +74,11 @@ build_frontend:
 
 deploy_s3:
   image:
-    name: amazon/aws-cli:latest   # or pin a version you trust
-    entrypoint: [""]              # <-- important: disable ENTRYPOINT=aws
+    name: amazon/aws-cli:latest # or pin a version you trust
+    entrypoint: [""] # <-- important: disable ENTRYPOINT=aws
   stage: deploy
   before_script:
-    - *aws_auth                   # your assume-role / auth block
+    - *aws_auth # your assume-role / auth block
   script:
     # if S3_BUCKET_NAME is just the bucket name, prefix with s3://
     - aws s3 sync "${BUILD_DIR}/" "s3://${S3_BUCKET_NAME}/" --delete
