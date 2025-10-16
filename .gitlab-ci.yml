@@ -13,7 +13,7 @@ variables:
       variables:
         STAGE: dev
         AWS_DEFAULT_REGION: eu-west-1
-        ROLE_ARN: arn:aws:iam::963496677041:role/dvf-smartqa-dev-role-sls-deployment
+        ROLE_ARN: arn:aws:iam::679799247858:role/dvf-smartqa-dev-role-sls-deployment
         S3_BUCKET_NAME: "smartqa-dev-backoffice-s3"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME != $CI_DEFAULT_BRANCH # dev
       variables:
@@ -39,7 +39,7 @@ variables:
       variables:
         STAGE: dev
         AWS_DEFAULT_REGION: eu-west-1
-        ROLE_ARN: arn:aws:iam::963496677041:role/dvf-smartqa-dev-role-sls-deployment
+        ROLE_ARN: arn:aws:iam::679799247858:role/dvf-smartqa-dev-role-sls-deployment
         S3_BUCKET_NAME: "smartqa-dev-backoffice-s3"
     - if: $CI_COMMIT_TAG # prod
       variables:
