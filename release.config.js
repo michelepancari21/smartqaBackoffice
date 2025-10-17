@@ -37,9 +37,6 @@ export default {
         ["@semantic-release/npm", {
             "npmPublish": false
         }],
-        ["@semantic-release/exec", {
-            "prepareCmd": "",
-        }],
         ["@semantic-release/git", {
             "assets": ["CHANGELOG.md", "package-lock.json", "package.json"],
             "message": "chore(release): ${nextRelease.version} [skip release]\n\n${nextRelease.notes}"
