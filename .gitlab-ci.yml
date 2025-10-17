@@ -1,59 +1,22 @@
 stages:
   - build
   - deploy
+  - post-action
 
 variables:
   AWS_DEFAULT_REGION: eu-west-1
   BUILD_DIR: "dist" # Ajuste selon ton dossier build (dist, build, public...)
 
-####### RULES FOR ALL INFRA JOBS #######
-.deploy_rules: &deploy_rules
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH # dev
-      variables:
-        STAGE: dev
-        AWS_DEFAULT_REGION: eu-west-1
-        ROLE_ARN: arn:aws:iam::679799247858:role/dvf-smartqa-dev-role-sls-deployment
-        S3_BUCKET_NAME: "smartqa-dev-backoffice-s3"
-        CLOUDFRONT_DISTRIBUTION_ID: "EUUFAWIMAZXPX"
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME != $CI_DEFAULT_BRANCH # dev
-      variables:
-        STAGE: dev
-        AWS_DEFAULT_REGION: eu-west-1
-        ROLE_ARN: arn:aws:iam::679799247858:role/dvf-smartqa-dev-role-sls-deployment
-        S3_BUCKET_NAME: "smartqa-dev-backoffice-s3"
-        CLOUDFRONT_DISTRIBUTION_ID: "EUUFAWIMAZXPX"
-    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
-      when: never
-    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH # dev
-      variables:
-        STAGE: dev
-        AWS_DEFAULT_REGION: eu-west-1
-        ROLE_ARN: arn:aws:iam::679799247858:role/dvf-smartqa-dev-role-sls-deployment
-        S3_BUCKET_NAME: "smartqa-dev-backoffice-s3"
-        CLOUDFRONT_DISTRIBUTION_ID: "EUUFAWIMAZXPX"
-    - if: $CI_COMMIT_BRANCH =~ /^develop.*$/ # dev
-      variables:
-        STAGE: dev
-        AWS_DEFAULT_REGION: eu-west-1
-        ROLE_ARN: arn:aws:iam::679799247858:role/dvf-smartqa-dev-role-sls-deployment
-        S3_BUCKET_NAME: "smartqa-dev-backoffice-s3"
-        CLOUDFRONT_DISTRIBUTION_ID: "EUUFAWIMAZXPX"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH # dev
-      variables:
-        STAGE: dev
-        AWS_DEFAULT_REGION: eu-west-1
-        ROLE_ARN: arn:aws:iam::679799247858:role/dvf-smartqa-dev-role-sls-deployment
-        S3_BUCKET_NAME: "smartqa-dev-backoffice-s3"
-        CLOUDFRONT_DISTRIBUTION_ID: "EUUFAWIMAZXPX"
-    - if: $CI_COMMIT_TAG # prod
-      variables:
-        STAGE: prod
-        AWS_DEFAULT_REGION: eu-west-1
-        ROLE_ARN: arn:aws:iam::926783724271:role/dvf-smartqa-prod-role-sls-deployment
-        S3_BUCKET_NAME: "smartqa-prod-backoffice-s3"
-        CLOUDFRONT_DISTRIBUTION_ID: "E2UZQUWUZFM3OT"
-    - when: never
+.only_dev: &only_dev
+  only:
+    refs:
+      - master
+    variables:
+      - $CI_COMMIT_MESSAGE !~ /\[skip release\]/
+
+.only_prod: &only_prod
+  only:
+    - tags
 
 ####### AUTH (AWS, COMPOSER, SSH) #######
 .aws_auth: &aws_auth
@@ -62,8 +25,13 @@ variables:
   - export AWS_SECRET_ACCESS_KEY=$( echo "${sts}" | awk '{print $2}' )
   - export AWS_SESSION_TOKEN=$( echo "${sts}" | awk '{print $3}' )
 
-####### SHARED DEPLOY #######
-build_frontend:
+.ssh_auth: &ssh_auth
+  - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+  - ssh-keyscan gitlab-ssh.dvtech.io >> ~/.ssh/known_hosts && chmod 644 ~/.ssh/known_hosts
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY" | tr  -d '\r' | ssh-add - > /dev/null
+
+build:development:
   image: node:20-alpine
   stage: build
   script:
@@ -73,21 +41,98 @@ build_frontend:
     paths:
       - ${BUILD_DIR}/
     expire_in: 1 hour
+  variables:
+    STAGE: dev
+    AWS_DEFAULT_REGION: eu-west-1
+    ROLE_ARN: arn:aws:iam::679799247858:role/dvf-smartqa-dev-role-sls-deployment
+    S3_BUCKET_NAME: "smartqa-dev-backoffice-s3"
+    CLOUDFRONT_DISTRIBUTION_ID: "EUUFAWIMAZXPX"
   cache:
     paths:
       - node_modules/
-  <<: *deploy_rules
+  <<: *only_dev
 
-deploy_s3:
+deploy:development:
   image:
-    name: amazon/aws-cli:latest # or pin a version you trust
-    entrypoint: [""] # <-- important: disable ENTRYPOINT=aws
+    name: amazon/aws-cli:latest
+    entrypoint: [""]
   stage: deploy
+  variables:
+    STAGE: dev
+    AWS_DEFAULT_REGION: eu-west-1
+    ROLE_ARN: arn:aws:iam::679799247858:role/dvf-smartqa-dev-role-sls-deployment
+    S3_BUCKET_NAME: "smartqa-dev-backoffice-s3"
+    CLOUDFRONT_DISTRIBUTION_ID: "EUUFAWIMAZXPX"
   before_script:
-    - *aws_auth # your assume-role / auth block
+    - *aws_auth
   script:
-    # if S3_BUCKET_NAME is just the bucket name, prefix with s3://
     - aws s3 sync "${BUILD_DIR}/" "s3://${S3_BUCKET_NAME}/" --delete
-    # Invalidate CloudFront cache
     - aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
-  <<: *deploy_rules
+  <<: *only_dev
+
+build:production:
+  image: node:20-alpine
+  stage: build
+  script:
+    - npm install
+    - npm run build-$STAGE
+  artifacts:
+    paths:
+      - ${BUILD_DIR}/
+    expire_in: 1 hour
+  variables:
+    STAGE: prod
+    AWS_DEFAULT_REGION: eu-west-1
+    ROLE_ARN: arn:aws:iam::926783724271:role/dvf-smartqa-prod-role-sls-deployment
+    S3_BUCKET_NAME: "smartqa-prod-backoffice-s3"
+    CLOUDFRONT_DISTRIBUTION_ID: "E2UZQUWUZFM3OT"
+  cache:
+    paths:
+      - node_modules/
+  <<: *only_prod
+
+deploy:production:
+  image:
+    name: amazon/aws-cli:latest
+    entrypoint: [""]
+  stage: deploy
+  variables:
+    STAGE: prod
+    AWS_DEFAULT_REGION: eu-west-1
+    ROLE_ARN: arn:aws:iam::926783724271:role/dvf-smartqa-prod-role-sls-deployment
+    S3_BUCKET_NAME: "smartqa-prod-backoffice-s3"
+    CLOUDFRONT_DISTRIBUTION_ID: "E2UZQUWUZFM3OT"
+  before_script:
+    - *aws_auth
+  script:
+    - aws s3 sync "${BUILD_DIR}/" "s3://${S3_BUCKET_NAME}/" --delete
+    - aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
+  <<: *only_prod
+
+####### POST ACTION JOBS (RELEASE, UPDATE DOCS) #######
+release-version:
+  stage: post-action
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - vendor
+      - node_modules
+    policy: pull
+  variables:
+    GIT_AUTHOR_NAME: "Gitlab Bot"
+    GIT_AUTHOR_EMAIL: "gitlab-bot@digitalvirgo.com"
+    GIT_COMMITTER_NAME: "Gitlab Bot"
+    GIT_COMMITTER_EMAIL: "gitlab-bot@digitalvirgo.com"
+    AWS_DEFAULT_REGION: eu-west-1
+    ROLE_ARN: arn:aws:iam::926783724271:role/dvf-smartqa-prod-role-sls-deployment
+  before_script:
+    - *aws_auth
+    - *ssh_auth
+  script:
+    - npm ci && npx semantic-release
+  only:
+    refs:
+      - master
+    variables:
+      - $CI_COMMIT_MESSAGE !~ /skip release/
+  when: manual
