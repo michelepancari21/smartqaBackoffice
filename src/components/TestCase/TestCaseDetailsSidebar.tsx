@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader, Calendar, Tag as TagIcon, Clock, CheckCircle, SquarePen, Eye, XCircle, AlertTriangle, Target, Shield, Flame } from 'lucide-react';
+import { X, Loader, Calendar, Tag as TagIcon, Clock, CheckCircle, SquarePen, Eye, XCircle, AlertTriangle, Target, Shield, Flame, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { sharedStepsApiService } from '../../services/sharedStepsApi';
 import { testCaseExecutionsApiService, TestCaseExecution } from '../../services/testCaseExecutionsApi';
@@ -7,7 +7,9 @@ import { testRunsApiService } from '../../services/testRunsApi';
 import { testCaseDataService } from '../../services/testCaseDataService';
 import { TestCase } from '../../types';
 import { TEST_RESULTS, TestResultId } from '../../types';
+import { getDeviceIcon, getDeviceColor } from '../../utils/deviceIcons';
 import toast from 'react-hot-toast';
+import AddExecutionCommentModal from '../TestRun/AddExecutionCommentModal';
 
 interface TestCaseDetailsSidebarProps {
   isOpen: boolean;
@@ -17,6 +19,8 @@ interface TestCaseDetailsSidebarProps {
   testRunId?: string;
   isTestRunClosed?: boolean;
   currentExecutionResult?: TestResultId;
+  configurationId?: string;
+  configurationLabel?: string;
   onExecutionResultChange?: (testCaseId: string, testRunId: string, newResultId: TestResultId) => void;
 }
 
@@ -181,20 +185,21 @@ const TestResultDropdown: React.FC<{
   onChange: (value: TestResultId, comment?: string) => void;
   disabled?: boolean;
   isUpdating?: boolean;
+  testCaseTitle?: string;
+  onOpenCommentModal: (selectedResultId: TestResultId) => void;
 }> = ({
   value,
   onChange,
   disabled = false,
-  isUpdating = false
+  isUpdating = false,
+  testCaseTitle: _testCaseTitle = '',
+  onOpenCommentModal
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [comment, setComment] = useState('');
-  const [isCommentExpanded, setIsCommentExpanded] = useState(false);
   const [selectedResult, setSelectedResult] = useState<TestResultId>(value);
   const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
-  // const selectedResultLabel = TEST_RESULTS[value];
 
   const getResultColor = (resultId: TestResultId): string => {
     switch (resultId) {
@@ -212,15 +217,16 @@ const TestResultDropdown: React.FC<{
 
   const handleResultSelect = (newResultId: TestResultId) => {
     setSelectedResult(newResultId);
-    // Don't close dropdown or call onChange yet
   };
 
-  const handleValidate = () => {
-    // Submit the selected result with comment
-    onChange(selectedResult, comment.trim() || undefined);
+  const handleQuickUpdate = () => {
+    onChange(selectedResult, undefined);
     setIsOpen(false);
-    setComment('');
-    setIsCommentExpanded(false);
+  };
+
+  const handleOpenCommentModal = () => {
+    setIsOpen(false);
+    onOpenCommentModal(selectedResult);
   };
 
   // Update selectedResult when value prop changes
@@ -335,41 +341,35 @@ const TestResultDropdown: React.FC<{
                 ))}
               </div>
             </div>
-            
-            {/* Comment Section */}
+
+            {/* Action Buttons */}
             <div className="border-t border-slate-600 p-3">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-medium text-gray-400">
-                  Comment (Optional)
-                </label>
+              <div className="flex flex-col space-y-2">
                 <button
                   type="button"
-                  onClick={() => setIsCommentExpanded(!isCommentExpanded)}
-                  className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                  onClick={handleOpenCommentModal}
+                  className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white text-sm rounded transition-colors flex items-center justify-center"
                 >
-                  {isCommentExpanded ? 'Collapse' : 'Expand'}
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Add Comment
                 </button>
-              </div>
-              
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Add a comment about this execution result..."
-                className={`w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 resize-none transition-all ${
-                  isCommentExpanded ? 'h-20' : 'h-10'
-                }`}
-                disabled={disabled || isUpdating}
-              />
-              
-              <div className="flex justify-end mt-3">
-                <button
-                  type="button"
-                  onClick={handleValidate}
-                  disabled={disabled || isUpdating}
-                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded transition-colors disabled:opacity-50 font-medium"
-                >
-                  Validate
-                </button>
+                <div className="flex justify-end space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen(false)}
+                    className="px-3 py-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleQuickUpdate}
+                    disabled={disabled || isUpdating}
+                    className="px-3 py-1.5 text-xs bg-cyan-600 hover:bg-cyan-700 text-white rounded transition-colors disabled:opacity-50 font-medium"
+                  >
+                    Update
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -387,12 +387,16 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
   testRunId,
   isTestRunClosed = false,
   currentExecutionResult,
-  onExecutionResultChange // eslint-disable-line @typescript-eslint/no-unused-vars -- Prop definition for component interface
+  configurationId,
+  configurationLabel,
+  onExecutionResultChange
 }) => {
   const [testCaseDetails, setTestCaseDetails] = useState<TestCaseDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingResult, setIsUpdatingResult] = useState(false);
+  const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
+  const [selectedResultForModal, setSelectedResultForModal] = useState<TestResultId | undefined>(undefined);
 
   const [imageModal, setImageModal] = useState<{
     isOpen: boolean;
@@ -519,14 +523,23 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
       if (testRunId) {
         try {
           console.log('🔄 Fetching executions for test case in test run context...');
+          console.log('🔍 Filtering by configurationId:', configurationId || 'none');
           const testRunResponse = await testRunsApiService.getTestRun(testRunId);
-          
+
           if (testRunResponse.data.attributes.executions && Array.isArray(testRunResponse.data.attributes.executions)) {
-            // Filter executions for this specific test case
+            // Filter executions for this specific test case AND configuration
             const testCaseExecutions = testRunResponse.data.attributes.executions.filter(
-              (execution: { test_case_id: number; [key: string]: unknown }) => execution.test_case_id.toString() === testCase.id
+              (execution: { test_case_id: number; configuration_id?: number; [key: string]: unknown }) => {
+                const matchesTestCase = execution.test_case_id.toString() === testCase.id;
+                const matchesConfig = configurationId
+                  ? (execution.configuration_id && execution.configuration_id.toString() === configurationId)
+                  : !execution.configuration_id;
+                return matchesTestCase && matchesConfig;
+              }
             );
-            
+
+            console.log('🔍 Found', testCaseExecutions.length, 'executions matching test case', testCase.id, 'and config', configurationId || 'none');
+
             executions = testCaseExecutions.map((execution: { id: number; test_case_id: number; result: number; user_id?: number; created_at: string; updated_at: string; [key: string]: unknown }) => ({
               id: execution.id.toString(),
               testCaseId: execution.test_case_id.toString(),
@@ -537,11 +550,11 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
               createdAt: new Date(execution.created_at),
               updatedAt: new Date(execution.updated_at)
             }));
-            
+
             // Sort by creation date (newest first)
             executions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-            
-            console.log('✅ Loaded', executions.length, 'executions for test case');
+
+            console.log('✅ Loaded', executions.length, 'executions for test case with matching configuration');
           }
         } catch (error) {
           console.error('❌ Failed to load executions:', error);
@@ -627,14 +640,15 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
     try {
       setIsUpdatingResult(true);
 
-      console.log(`🔄 Updating execution result for test case ${testCase.id} in test run ${testRunId} to: ${newResultId} (${newResultLabel})`);
+      console.log(`🔄 Updating execution result for test case ${testCase.id} in test run ${testRunId} with config ${configurationId || 'none'} to: ${newResultId} (${newResultLabel})`);
 
       // Create the new execution via API
       const response = await testCaseExecutionsApiService.createTestCaseExecution({
         testCaseId: testCase.id,
         testRunId: testRunId,
         result: newResultId,
-        comment: comment
+        comment: comment,
+        configurationId: configurationId
       });
 
       // Add the new execution to the local history immediately
@@ -649,7 +663,7 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
           createdAt: new Date(),
           updatedAt: new Date()
         };
-        
+
         // Add to the beginning of the executions array (most recent first)
         setTestCaseDetails(prev => prev ? {
           ...prev,
@@ -657,6 +671,10 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
         } : prev);
       }
 
+      // Notify parent component about the change
+      if (onExecutionResultChange) {
+        onExecutionResultChange(testCase.id, testRunId, newResultId);
+      }
 
       toast.success(`Execution result updated to ${newResultLabel}`);
 
@@ -714,30 +732,6 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                     <h2 className="text-lg font-semibold text-white mb-4">{testCaseDetails.title}</h2>
                   </div>
 
-                  {/* Description */}
-                  {testCaseDetails.description && (
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-300 mb-2">Description</h4>
-                      <ClickableHtmlContent
-                        content={testCaseDetails.description}
-                        className="text-sm text-gray-300 bg-slate-700/50 border border-slate-600 rounded-lg p-3"
-                        onImageClick={handleImageClick}
-                      />
-                    </div>
-                  )}
-
-                  {/* Preconditions */}
-                  {testCaseDetails.preconditions && (
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-300 mb-2">Preconditions</h4>
-                      <ClickableHtmlContent
-                        content={testCaseDetails.preconditions}
-                        className="text-sm text-gray-300 bg-slate-700/50 border border-slate-600 rounded-lg p-3"
-                        onImageClick={handleImageClick}
-                      />
-                    </div>
-                  )}
-
                   {/* Metadata */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -790,6 +784,17 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                          testCaseDetails.automationStatus === 5 ? 'Obsolete' : 'Unknown'}
                       </span>
                     </div>
+                    {configurationLabel && (context === 'test-run-details' || context === 'test-runs-overview') && (
+                      <div>
+                        <h4 className="text-xs font-medium text-gray-400 mb-2">Configuration</h4>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-700/50 text-gray-200 border border-slate-600">
+                          <span className={getDeviceColor(configurationLabel)}>
+                            {getDeviceIcon(configurationLabel)}
+                          </span>
+                          {configurationLabel}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Tags */}
@@ -807,6 +812,30 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                           </span>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  {testCaseDetails.description && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-300 mb-2">Description</h4>
+                      <ClickableHtmlContent
+                        content={testCaseDetails.description}
+                        className="text-sm text-gray-300 bg-slate-700/50 border border-slate-600 rounded-lg p-3"
+                        onImageClick={handleImageClick}
+                      />
+                    </div>
+                  )}
+
+                  {/* Preconditions */}
+                  {testCaseDetails.preconditions && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-300 mb-2">Preconditions</h4>
+                      <ClickableHtmlContent
+                        content={testCaseDetails.preconditions}
+                        className="text-sm text-gray-300 bg-slate-700/50 border border-slate-600 rounded-lg p-3"
+                        onImageClick={handleImageClick}
+                      />
                     </div>
                   )}
 
@@ -939,6 +968,11 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                         onChange={handleExecutionResultChange}
                         disabled={isUpdatingResult}
                         isUpdating={isUpdatingResult}
+                        testCaseTitle={testCase?.title || ''}
+                        onOpenCommentModal={(selectedResultId) => {
+                          setSelectedResultForModal(selectedResultId);
+                          setIsCommentModalOpen(true);
+                        }}
                       />
                       <p className="text-xs text-gray-400 mt-2">
                         Update the execution result for this test case in the current test run
@@ -980,8 +1014,12 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                                 </div>
                                 {execution.comment && (
                                   <div className="mb-2 p-3 bg-slate-800/50 border border-slate-600 rounded">
-                                    <div className="text-gray-400 mb-1">Comment:</div>
-                                    <div className="text-sm text-gray-300">{execution.comment}</div>
+                                    <div className="text-xs text-gray-400 mb-1">Comment:</div>
+                                    <ClickableHtmlContent
+                                      content={execution.comment}
+                                      className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none"
+                                      onImageClick={handleImageClick}
+                                    />
                                   </div>
                                 )}
                               </div>
@@ -1037,11 +1075,18 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                       <Calendar className="w-4 h-4 mr-2" />
                       <span>Created: {format(testCaseDetails.createdAt, 'MMM dd, yyyy HH:mm')}</span>
                     </div>
-                    {testCaseDetails.updatedAt.getTime() !== testCaseDetails.createdAt.getTime() && (
+                    {context === 'test-cases' ? (
                       <div className="flex items-center text-xs text-gray-400">
                         <Clock className="w-4 h-4 mr-2" />
                         <span>Updated: {format(testCaseDetails.updatedAt, 'MMM dd, yyyy HH:mm')}</span>
                       </div>
+                    ) : (
+                      testCaseDetails.executions && testCaseDetails.executions.length > 0 && (
+                        <div className="flex items-center text-xs text-gray-400">
+                          <Clock className="w-4 h-4 mr-2" />
+                          <span>Last Execution: {format(testCaseDetails.executions[0].createdAt, 'MMM dd, yyyy HH:mm')}</span>
+                        </div>
+                      )
                     )}
                   </div>
                 </div>
@@ -1058,6 +1103,24 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
         imageSrc={imageModal.src}
         imageAlt={imageModal.alt}
       />
+
+      {/* Add Comment Modal */}
+      {testCase && context !== 'test-cases' && testRunId && selectedResultForModal && (
+        <AddExecutionCommentModal
+          isOpen={isCommentModalOpen}
+          onClose={() => {
+            setIsCommentModalOpen(false);
+            setSelectedResultForModal(undefined);
+          }}
+          onSubmit={(resultId, comment) => {
+            handleExecutionResultChange(resultId, comment);
+            setIsCommentModalOpen(false);
+            setSelectedResultForModal(undefined);
+          }}
+          currentResult={selectedResultForModal}
+          testCaseTitle={testCase.title}
+        />
+      )}
     </>
   );
 };
