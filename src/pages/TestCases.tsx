@@ -666,7 +666,7 @@ const TestCases: React.FC = () => {
       const updateData = {
         title: data.title || '',
         description: data.description || '',
-        priority: data.priority === 1 ? 'low' : data.priority === 2 ? 'medium' : data.priority === 3 ? 'high' : data.priority === 4 ? 'critical' : 'medium',
+        priority: data.priority === 1 ? 'medium' : data.priority === 2 ? 'critical' : data.priority === 3 ? 'high' : data.priority === 4 ? 'low' : 'medium',
         testType: getTestTypeString(data.testCaseType),
         status: data.state === 1 ? 'active' :
                 data.state === 2 ? 'draft' :

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader, Calendar, Tag as TagIcon, Clock, CheckCircle, SquarePen, Eye, XCircle, AlertTriangle, Target, Shield, Flame, MessageSquare } from 'lucide-react';
+import { X, Loader, Calendar, Tag as TagIcon, Clock, CheckCircle, SquarePen, Eye, XCircle, AlertTriangle, Target, Shield, Flame, MessageSquare, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { sharedStepsApiService } from '../../services/sharedStepsApi';
 import { testCaseExecutionsApiService, TestCaseExecution } from '../../services/testCaseExecutionsApi';
 import { testRunsApiService } from '../../services/testRunsApi';
 import { testCaseDataService } from '../../services/testCaseDataService';
+import { testCasesApiService } from '../../services/testCasesApi';
 import { TestCase } from '../../types';
 import { TEST_RESULTS, TestResultId } from '../../types';
 import { getDeviceIcon, getDeviceColor } from '../../utils/deviceIcons';
@@ -22,6 +23,7 @@ interface TestCaseDetailsSidebarProps {
   configurationId?: string;
   configurationLabel?: string;
   onExecutionResultChange?: (testCaseId: string, testRunId: string, newResultId: TestResultId) => void;
+  onAttachmentRemoved?: () => void;
 }
 
 interface StepResult {
@@ -173,10 +175,10 @@ const ClickableHtmlContent: React.FC<{
 };
 
 const PRIORITIES = {
-  1: { label: 'Low', icon: Shield, color: 'text-green-400' },
-  2: { label: 'Medium', icon: Target, color: 'text-yellow-400' },
+  1: { label: 'Medium', icon: Target, color: 'text-yellow-400' },
+  2: { label: 'Critical', icon: AlertTriangle, color: 'text-red-500' },
   3: { label: 'High', icon: Flame, color: 'text-orange-500' },
-  4: { label: 'Critical', icon: AlertTriangle, color: 'text-red-500' }
+  4: { label: 'Low', icon: Shield, color: 'text-green-400' }
 } as const;
 
 // Test Result Dropdown Component
@@ -389,7 +391,8 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
   currentExecutionResult,
   configurationId,
   configurationLabel,
-  onExecutionResultChange
+  onExecutionResultChange,
+  onAttachmentRemoved
 }) => {
   const [testCaseDetails, setTestCaseDetails] = useState<TestCaseDetails | null>(null);
   const [loading, setLoading] = useState(false);
@@ -601,8 +604,8 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
   };
 
   const getPriorityNumber = (priority: string): number => {
-    const priorityMap = { 'Low': 1, 'Medium': 2, 'High': 3, 'Critical': 4 };
-    return priorityMap[priority as keyof typeof priorityMap] || 2;
+    const priorityMap = { 'Low': 4, 'Medium': 1, 'High': 3, 'Critical': 2 };
+    return priorityMap[priority as keyof typeof priorityMap] || 1;
   };
 
   const getStateNumber = (status: string): number => {
@@ -627,6 +630,46 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
     }
   };
 
+  const handleRemoveAttachment = async (attachmentId: string) => {
+    if (!testCase || !testCaseDetails) return;
+
+    try {
+      const updatedAttachments = testCaseDetails.attachments
+        .filter(att => att.id !== attachmentId)
+        .map(att => ({
+          type: "Attachment" as const,
+          id: `/api/attachments/${att.id}`
+        }));
+
+      await testCasesApiService.updateTestCase(testCase.id, {
+        title: testCase.title,
+        description: testCase.description,
+        priority: testCase.priority,
+        testType: testCase.type as 'functional' | 'regression' | 'smoke' | 'integration' | 'performance',
+        status: testCase.status as 'draft' | 'active' | 'deprecated',
+        automationStatus: testCase.automationStatus,
+        template: 1,
+        preconditions: testCase.preconditions || '',
+        tags: [],
+        createdAttachments: updatedAttachments
+      });
+
+      setTestCaseDetails(prev => prev ? {
+        ...prev,
+        attachments: prev.attachments.filter(att => att.id !== attachmentId)
+      } : prev);
+
+      if (onAttachmentRemoved) {
+        onAttachmentRemoved();
+      }
+
+      toast.success('Attachment removed successfully');
+    } catch (error) {
+      console.error('Failed to remove attachment:', error);
+      toast.error('Failed to remove attachment');
+    }
+  };
+
   const handleExecutionResultChange = async (newResultId: TestResultId, comment?: string) => {
     if (!testCase || !testRunId || isTestRunClosed) {
       if (isTestRunClosed) {
@@ -636,7 +679,7 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
     }
 
     const newResultLabel = TEST_RESULTS[newResultId];
-    
+
     try {
       setIsUpdatingResult(true);
 
@@ -1039,7 +1082,18 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                           <div key={attachment.id} className="bg-slate-700/50 border border-slate-600 rounded-lg p-3">
                             {isImageUrl(attachment.url) ? (
                               <div className="space-y-2">
-                                <div className="text-xs text-gray-400">{getFileNameFromUrl(attachment.url)}</div>
+                                <div className="flex items-center justify-between">
+                                  <div className="text-xs text-gray-400">{getFileNameFromUrl(attachment.url)}</div>
+                                  {context === 'test-cases' && (
+                                    <button
+                                      onClick={() => handleRemoveAttachment(attachment.id)}
+                                      className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                                      title="Remove attachment"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                                 <img
                                   src={attachment.url}
                                   alt={attachment.fileName}
@@ -1053,14 +1107,25 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                                 <div className="flex items-center space-x-2 flex-1 min-w-0">
                                   <div className="text-sm text-gray-300 truncate">{getFileNameFromUrl(attachment.url)}</div>
                                 </div>
-                                <a
-                                  href={attachment.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center px-2 py-1 bg-cyan-500/20 border border-cyan-500/30 rounded text-xs text-cyan-400 hover:bg-cyan-500/30 transition-colors"
-                                >
-                                  Download
-                                </a>
+                                <div className="flex items-center space-x-2">
+                                  <a
+                                    href={attachment.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center px-2 py-1 bg-cyan-500/20 border border-cyan-500/30 rounded text-xs text-cyan-400 hover:bg-cyan-500/30 transition-colors"
+                                  >
+                                    Download
+                                  </a>
+                                  {context === 'test-cases' && (
+                                    <button
+                                      onClick={() => handleRemoveAttachment(attachment.id)}
+                                      className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                                      title="Remove attachment"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
