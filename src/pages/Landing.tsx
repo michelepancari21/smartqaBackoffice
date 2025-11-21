@@ -71,19 +71,15 @@ const Landing: React.FC = () => {
       <header className="bg-gradient-to-r from-slate-900 via-purple-900 to-slate-900 border-b border-purple-500/20 shadow-2xl">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <Link 
-              to="/" 
-              className="flex items-center space-x-3 hover:opacity-80 transition-opacity group"
-              title="Retour à l'accueil"
-            >
+            <div className="flex items-center space-x-3">
               <div className="relative">
-                <Hexagon className="w-8 h-8 text-cyan-400 fill-cyan-400/20 group-hover:text-cyan-300 transition-colors" />
-                <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-purple-500 opacity-20 rounded-lg blur-sm group-hover:opacity-30 transition-opacity"></div>
+                <Hexagon className="w-8 h-8 text-cyan-400 fill-cyan-400/20" />
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-purple-500 opacity-20 rounded-lg blur-sm"></div>
               </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent group-hover:from-cyan-300 group-hover:to-purple-300 transition-all">
+              <span className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
                 SMARTQA
               </span>
-            </Link>
+            </div>
 
             <nav className="flex items-center space-x-8">
               <div className="flex items-center space-x-6">

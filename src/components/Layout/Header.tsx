@@ -22,10 +22,10 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Link 
-              to="/" 
+            <Link
+              to="/projects"
               className="flex items-center space-x-3 hover:opacity-80 transition-opacity group"
-              title="Retour à l'accueil"
+              title="Aller aux projets"
             >
               <div className="relative">
                 <Hexagon className="w-8 h-8 text-cyan-400 fill-cyan-400/20 group-hover:text-cyan-300 transition-colors" />
