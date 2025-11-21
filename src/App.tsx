@@ -5,6 +5,7 @@ import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
 import { LoadingProvider } from './context/LoadingContext';
 import { UsersProvider } from './context/UsersContext';
+import { ThemeProvider } from './context/ThemeContext';
 import GlobalLoader from './components/UI/GlobalLoader';
 import { useLoading } from './context/LoadingContext';
 import Layout from './components/Layout/Layout';
@@ -72,15 +73,17 @@ const AppContent: React.FC = () => {
 
 function App() {
   return (
-    <AuthProvider>
-      <UsersProvider>
-        <AppProvider>
-          <LoadingProvider>
-            <AppContent />
-          </LoadingProvider>
-        </AppProvider>
-      </UsersProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <UsersProvider>
+          <AppProvider>
+            <LoadingProvider>
+              <AppContent />
+            </LoadingProvider>
+          </AppProvider>
+        </UsersProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
