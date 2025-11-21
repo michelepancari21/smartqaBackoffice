@@ -308,7 +308,7 @@ const Sidebar: React.FC = () => {
   }, [state.projects]);
 
   return (
-    <aside className="w-64 bg-gradient-to-b from-slate-900 to-slate-800 border-r border-purple-500/20 shadow-2xl">
+    <aside className="w-64 sidebar-light border-r shadow-2xl">
       <nav className="p-4 space-y-2">
         {/* Projects Dropdown */}
         <div className="mb-4">
