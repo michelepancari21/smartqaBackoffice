@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+html.dark .bg-yellow-400 {
+  background-color: #2563eb !important;
+}
+
+html.dark .text-black {
+  color: white !important;
+}
+
 @layer base {
   :root {
     color-scheme: light dark;
