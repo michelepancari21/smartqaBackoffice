@@ -18,6 +18,9 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     const root = document.documentElement;
 
+    console.log('Theme useEffect triggered. Current theme:', theme);
+    console.log('HTML classes before:', root.classList.toString());
+
     if (theme === 'dark') {
       root.classList.add('dark');
       root.classList.remove('light');
@@ -26,6 +29,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       root.classList.remove('dark');
     }
 
+    console.log('HTML classes after:', root.classList.toString());
     localStorage.setItem('theme', theme);
   }, [theme]);
 
@@ -39,7 +43,11 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, []);
 
   const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    setTheme(prev => {
+      const newTheme = prev === 'dark' ? 'light' : 'dark';
+      console.log('Theme toggled:', prev, '->', newTheme);
+      return newTheme;
+    });
   };
 
   return (
