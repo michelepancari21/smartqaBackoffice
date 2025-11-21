@@ -2,7 +2,6 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   Hexagon,
-  ArrowRight,
   TestTube,
   BarChart3,
   Users,
@@ -15,7 +14,6 @@ import {
   Layers,
   CheckCircle
 } from 'lucide-react';
-import Button from '../components/UI/Button';
 import Card from '../components/UI/Card';
 import { useAuth } from '../context/AuthContext';
 
@@ -88,15 +86,6 @@ const Landing: React.FC = () => {
             </Link>
 
             <nav className="flex items-center space-x-8">
-              {!state.isAuthenticated && (
-                <Link 
-                  to="/features" 
-                  className="text-gray-300 hover:text-cyan-400 transition-colors font-medium"
-                >
-                  Features
-                </Link>
-              )}
-              
               <div className="flex items-center space-x-6">
                 {state.isAuthenticated ? (
                   <>
@@ -184,13 +173,6 @@ const Landing: React.FC = () => {
             </div>
           </div>
 
-          {/* CTA Button */}
-          <Link to="/login">
-            <Button size="lg" className="text-lg px-8 py-4 shadow-2xl hover:shadow-cyan-500/25">
-              Get Started
-              <ArrowRight className="w-5 h-5 ml-2" />
-            </Button>
-          </Link>
         </div>
       </main>
 
@@ -233,14 +215,6 @@ const Landing: React.FC = () => {
           ))}
         </div>
 
-        <div className="text-center">
-          <Link to="/features">
-            <Button size="lg" className="text-lg px-8 py-4 shadow-2xl hover:shadow-cyan-500/25">
-              Discover All Features
-              <ArrowRight className="w-5 h-5 ml-2" />
-            </Button>
-          </Link>
-        </div>
       </section>
 
       {/* Footer */}
