@@ -115,15 +115,9 @@ export const buildSharedStepsRelationships = (
             });
           }
         } else {
-          // New shared step instance with timestamp - find by position in array
-          let sharedStepIndex = 0;
-          for (let i = 0; i < position; i++) {
-            if (stepOrder[i].type === 'shared') {
-              sharedStepIndex++;
-            }
-          }
-          
-          const sharedStep = sharedSteps[sharedStepIndex];
+          // New shared step instance with timestamp - find by ID, not by position
+          const sharedStepId = idParts[1];
+          const sharedStep = sharedSteps.find(s => s.id === sharedStepId && !s.pivotId);
           if (sharedStep) {
             sharedStepsRelationships.push({
               type: "SharedStep",

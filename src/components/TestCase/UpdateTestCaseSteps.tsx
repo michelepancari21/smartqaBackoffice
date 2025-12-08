@@ -92,18 +92,9 @@ const UpdateTestCaseSteps: React.FC<UpdateTestCaseStepsProps> = ({
             return sharedStep ? { type: 'shared' as const, id: orderItem.id, sharedStep } : null;
           } else {
             // New shared step instance with timestamp
-            // Find the shared step instance at the correct position
-            let sharedStepIndex = 0;
-            const currentOrderIndex = stepOrder.findIndex(item => item.id === orderItem.id);
-            
-            // Count shared step instances before this position
-            for (let i = 0; i < currentOrderIndex; i++) {
-              if (stepOrder[i].type === 'shared') {
-                sharedStepIndex++;
-              }
-            }
-            
-            const sharedStep = sharedSteps[sharedStepIndex];
+            // Extract the shared step ID and find by ID, not by position
+            const sharedStepId = idParts[1];
+            const sharedStep = sharedSteps.find(s => s.id === sharedStepId && !s.pivotId);
             return sharedStep ? { type: 'shared' as const, id: orderItem.id, sharedStep } : null;
           }
         }
