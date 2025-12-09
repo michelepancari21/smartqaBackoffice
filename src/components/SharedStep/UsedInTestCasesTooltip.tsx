@@ -30,6 +30,7 @@ const UsedInTestCasesTooltip: React.FC<UsedInTestCasesTooltipProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [modalPosition, setModalPosition] = useState<ModalPosition | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen && testCases.length === 0 && !error) {
@@ -38,10 +39,13 @@ const UsedInTestCasesTooltip: React.FC<UsedInTestCasesTooltipProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
-    const handleScroll = () => {
-      if (isOpen) {
-        setIsOpen(false);
-        setModalPosition(null);
+    const handleScroll = (e: Event) => {
+      if (isOpen && modalRef.current) {
+        const target = e.target as Node;
+        if (!modalRef.current.contains(target)) {
+          setIsOpen(false);
+          setModalPosition(null);
+        }
       }
     };
 
@@ -139,6 +143,7 @@ const UsedInTestCasesTooltip: React.FC<UsedInTestCasesTooltipProps> = ({
           }}
         />
         <div
+          ref={modalRef}
           className="fixed z-[9999] w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl"
           style={{
             top: modalPosition.top !== undefined ? `${modalPosition.top}px` : 'auto',
