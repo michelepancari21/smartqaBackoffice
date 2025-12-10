@@ -163,37 +163,27 @@ class UsersApiService {
   }
 
   async updateUserRole(userId: string, roleId: number): Promise<void> {
-    await apiService.authenticatedRequest(`/users/${userId}`, {
+    await apiService.authenticatedRequest(`/users/${userId}/assign-role`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/vnd.api+json',
+        'Accept': 'application/vnd.api+json',
       },
       body: JSON.stringify({
-        data: {
-          type: 'users',
-          id: userId,
-          attributes: {
-            role_id: roleId
-          }
-        }
+        role_id: roleId
       })
     });
   }
 
   async updateUserTeam(userId: string, teamId: number): Promise<void> {
-    await apiService.authenticatedRequest(`/users/${userId}`, {
+    await apiService.authenticatedRequest(`/users/${userId}/assign-team`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/vnd.api+json',
+        'Accept': 'application/vnd.api+json',
       },
       body: JSON.stringify({
-        data: {
-          type: 'users',
-          id: userId,
-          attributes: {
-            team_id: teamId
-          }
-        }
+        team_id: teamId
       })
     });
   }
