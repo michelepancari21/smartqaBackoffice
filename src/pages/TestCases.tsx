@@ -744,9 +744,9 @@ const TestCases: React.FC = () => {
     setIsDuplicateModalOpen(true);
   }, []);
 
-  const handleDuplicateSubmit = useCallback(async (testCase: TestCase, targetProjectId: string, targetFolderId: string) => {
+  const handleDuplicateSubmit = useCallback(async (testCase: TestCase, targetProjectId: string, targetFolderId: string, title: string) => {
     try {
-      await testCasesApiService.cloneTestCase(testCase.id, targetProjectId, targetFolderId);
+      await testCasesApiService.cloneTestCase(testCase.id, targetProjectId, targetFolderId, title);
 
       if (targetProjectId === selectedProject?.id) {
         await fetchAllTestCasesAndExtractFolders(selectedProject.id);

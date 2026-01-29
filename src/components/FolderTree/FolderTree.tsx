@@ -13,6 +13,7 @@ interface FolderNodeProps {
   onToggleExpanded: (folderId: string) => void;
   onEditFolder?: (folder: FolderType) => void;
   onDeleteFolder?: (folder: FolderType) => void;
+  showTestCaseCount?: boolean;
 }
 
 const FolderNode: React.FC<FolderNodeProps> = React.memo(({
@@ -23,7 +24,8 @@ const FolderNode: React.FC<FolderNodeProps> = React.memo(({
   expandedFolders,
   onToggleExpanded,
   onEditFolder,
-  onDeleteFolder
+  onDeleteFolder,
+  showTestCaseCount = true
 }) => {
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
   const [dropdownPosition, setDropdownPosition] = React.useState<{ top: number; left: number; alignTop: boolean } | null>(null);
@@ -151,13 +153,15 @@ const FolderNode: React.FC<FolderNodeProps> = React.memo(({
             <div className="flex-1 min-w-0 overflow-hidden">
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-sm font-medium max-w-[140px]">{folder.name}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium ${
-                  testCasesCount > 0
-                    ? 'text-cyan-700 dark:text-cyan-400 bg-cyan-500/20 border border-cyan-500/30'
-                    : 'text-slate-500 dark:text-gray-500 bg-slate-200 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600'
-                }`}>
-                  {testCasesCount}
-                </span>
+                {showTestCaseCount && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium ${
+                    testCasesCount > 0
+                      ? 'text-cyan-700 dark:text-cyan-400 bg-cyan-500/20 border border-cyan-500/30'
+                      : 'text-slate-500 dark:text-gray-500 bg-slate-200 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600'
+                  }`}>
+                    {testCasesCount}
+                  </span>
+                )}
               </div>
               {/* Show description only for the selected folder */}
               {isSelected && folder.description && (
@@ -239,6 +243,7 @@ const FolderNode: React.FC<FolderNodeProps> = React.memo(({
               onToggleExpanded={onToggleExpanded}
               onEditFolder={onEditFolder}
               onDeleteFolder={onDeleteFolder}
+              showTestCaseCount={showTestCaseCount}
             />
           ))}
         </div>
@@ -256,6 +261,7 @@ interface FolderTreeProps {
   loading: boolean;
   onEditFolder?: (folder: FolderType) => void;
   onDeleteFolder?: (folder: FolderType) => void;
+  showTestCaseCount?: boolean;
 }
 
 const FolderTree: React.FC<FolderTreeProps> = React.memo(({
@@ -264,7 +270,8 @@ const FolderTree: React.FC<FolderTreeProps> = React.memo(({
   onSelectFolder,
   loading,
   onEditFolder,
-  onDeleteFolder
+  onDeleteFolder,
+  showTestCaseCount = true
 }) => {
   const [expandedFolders, setExpandedFolders] = React.useState<Set<string>>(new Set());
 
@@ -355,6 +362,7 @@ const FolderTree: React.FC<FolderTreeProps> = React.memo(({
           onToggleExpanded={handleToggleExpanded}
           onEditFolder={onEditFolder}
           onDeleteFolder={onDeleteFolder}
+          showTestCaseCount={showTestCaseCount}
         />
       ))}
     </div>

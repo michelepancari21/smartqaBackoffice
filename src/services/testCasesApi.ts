@@ -773,10 +773,13 @@ class TestCasesApiService {
     });
   }
 
-  async cloneTestCase(id: string, targetProjectId: string, targetFolderId: string): Promise<CreateTestCaseResponse> {
+  async cloneTestCase(id: string, targetProjectId: string, targetFolderId: string, title: string): Promise<CreateTestCaseResponse> {
     const requestBody = {
       data: {
         type: "TestCase",
+        attributes: {
+          title: title
+        },
         relationships: {
           project: {
             data: { type: "Project", id: `/api/projects/${targetProjectId}` }

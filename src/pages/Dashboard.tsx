@@ -12,6 +12,7 @@ import Card from '../components/UI/Card';
 import SkeletonCard from '../components/UI/SkeletonCard';
 import ClosedRunsCaseResultsStackedChart from '../components/Charts/ClosedRunsCaseResultsStackedChart';
 import { useApp } from '../context/AppContext';
+import { useTheme } from '../context/ThemeContext';
 import { useDashboardSummary } from '../hooks/useDashboardSummary';
 import { useTestRunsData } from '../hooks/useTestRunsData';
 import { useRestoreLastProject } from '../hooks/useRestoreLastProject';
@@ -20,9 +21,12 @@ import { TEST_CASE_TYPES } from '../types';
 export default function Dashboard() {
   const navigate = useNavigate();
   const { getSelectedProject, state } = useApp();
+  const { theme } = useTheme();
   const selectedProject = getSelectedProject();
 
   useRestoreLastProject();
+
+  const tickColor = theme === 'dark' ? '#94a3b8' : '#475569';
 
   const { summaryData, loading: summaryLoading } = useDashboardSummary(selectedProject, state.projects);
   const { data: testRunsData, loading: testRunsLoading } = useTestRunsData(selectedProject?.id);
@@ -262,11 +266,11 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-slate-300 dark:stroke-slate-700" />
                   <XAxis
                     dataKey="month"
-                    className="stroke-slate-600 dark:stroke-slate-400" tick={{ fill: 'currentColor' }} style={{ color: 'inherit' }}
+                    tick={{ fill: tickColor }}
                     fontSize={12}
                   />
                   <YAxis
-                    className="stroke-slate-600 dark:stroke-slate-400" tick={{ fill: 'currentColor' }} style={{ color: 'inherit' }}
+                    tick={{ fill: tickColor }}
                     fontSize={12}
                    allowDecimals={false}
                     domain={[0, 'dataMax']}
@@ -458,11 +462,11 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-slate-300 dark:stroke-slate-700" />
                   <XAxis
                     dataKey="month"
-                    className="stroke-slate-600 dark:stroke-slate-400" tick={{ fill: 'currentColor' }} style={{ color: 'inherit' }}
+                    tick={{ fill: tickColor }}
                     fontSize={12}
                   />
                   <YAxis
-                    className="stroke-slate-600 dark:stroke-slate-400" tick={{ fill: 'currentColor' }} style={{ color: 'inherit' }}
+                    tick={{ fill: tickColor }}
                     fontSize={12}
                     domain={[0, 'dataMax + 1']}
                   />
