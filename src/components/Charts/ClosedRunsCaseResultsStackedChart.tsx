@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  ResponsiveContainer, 
-  BarChart, 
-  CartesianGrid, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  Legend, 
-  Bar 
+import {
+  ResponsiveContainer,
+  BarChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  Bar
 } from 'recharts';
 import { Loader, BarChart as BarChartIcon } from 'lucide-react';
 import { apiService } from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 import { TEST_RESULTS, TestResultId } from '../../types';
 
 // Helper function to convert result ID to label
@@ -256,12 +257,16 @@ const ClosedRunsCaseResultsStackedChart: React.FC<ClosedRunsCaseResultsStackedCh
   className = '',
   closedTestRunsData: propsClosedTestRunsData
 }) => {
+  const { theme } = useTheme();
   const [data, setData] = useState<ChartRow[]>([]);
   const [resultLabels, setResultLabels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPercentage, setShowPercentage] = useState(false);
   const isFetchingRef = useRef(false);
+
+  const tickColor = theme === 'dark' ? '#94a3b8' : '#475569';
+  const labelColor = theme === 'dark' ? '#9ca3af' : '#475569';
 
   // Memoized data transformation to avoid recomputing on every render
   const { chartData, percentageData } = useMemo(() => {
@@ -436,24 +441,24 @@ const ClosedRunsCaseResultsStackedChart: React.FC<ClosedRunsCaseResultsStackedCh
             maxBarSize={60}
           >
             <CartesianGrid strokeDasharray="3 3" className="stroke-slate-300 dark:stroke-slate-700" />
-            <XAxis 
-              dataKey="date" 
-              className="stroke-slate-600 dark:stroke-slate-400" tick={{ fill: 'currentColor' }} style={{ color: 'inherit' }} 
+            <XAxis
+              dataKey="date"
+              tick={{ fill: tickColor }}
               fontSize={12}
               angle={-45}
               textAnchor="end"
               height={80}
               interval={0}
             />
-            <YAxis 
-              className="stroke-slate-600 dark:stroke-slate-400" tick={{ fill: 'currentColor' }} style={{ color: 'inherit' }} 
+            <YAxis
+              tick={{ fill: tickColor }}
               fontSize={12}
               allowDecimals={false}
-              label={{ 
-                value: showPercentage ? 'Percentage (%)' : 'Count', 
-                angle: -90, 
+              label={{
+                value: showPercentage ? 'Percentage (%)' : 'Count',
+                angle: -90,
                 position: 'insideLeft',
-                style: { textAnchor: 'middle' }, className: 'fill-slate-600 dark:fill-gray-400'
+                style: { textAnchor: 'middle', fill: labelColor }
               }}
               domain={showPercentage ? [0, 100] : [0, 'dataMax']}
             />

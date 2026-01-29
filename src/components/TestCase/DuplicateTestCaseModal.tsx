@@ -15,7 +15,7 @@ import { useLoading } from '../../context/LoadingContext';
 interface DuplicateTestCaseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onDuplicate: (testCase: TestCase, targetProjectId: string, targetFolderId: string) => Promise<void>;
+  onDuplicate: (testCase: TestCase, targetProjectId: string, targetFolderId: string, title: string) => Promise<void>;
   testCase: TestCase | null;
   projects: Project[];
   currentProjectId: string;
@@ -32,6 +32,7 @@ const DuplicateTestCaseModal: React.FC<DuplicateTestCaseModalProps> = ({
   const { withLoading } = useLoading();
   const [selectedProjectId, setSelectedProjectId] = useState<string>(currentProjectId);
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
+  const [editedTitle, setEditedTitle] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [folderTree, setFolderTree] = useState<Folder[]>([]);
@@ -47,6 +48,7 @@ const DuplicateTestCaseModal: React.FC<DuplicateTestCaseModalProps> = ({
     if (isOpen && testCase) {
       setSelectedProjectId(currentProjectId);
       setSelectedFolderId(testCase.folderId || '');
+      setEditedTitle(`${testCase.title} (Copy)`);
     }
   }, [isOpen, testCase, currentProjectId]);
 
@@ -115,14 +117,14 @@ const DuplicateTestCaseModal: React.FC<DuplicateTestCaseModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!testCase || !selectedProjectId) {
+    if (!testCase || !selectedProjectId || !editedTitle.trim()) {
       return;
     }
 
     try {
       setIsSubmitting(true);
       await withLoading(
-        onDuplicate(testCase, selectedProjectId, selectedFolderId || ''),
+        onDuplicate(testCase, selectedProjectId, selectedFolderId || '', editedTitle),
         'Duplicating test case...'
       );
       onClose();
@@ -222,12 +224,17 @@ const DuplicateTestCaseModal: React.FC<DuplicateTestCaseModalProps> = ({
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
-            Test Case
+            Test Case Title *
           </label>
-          <div className="bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-3">
-            <p className="text-slate-900 dark:text-white font-medium">{testCase?.title}</p>
-            <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">TC{testCase?.id}</p>
-          </div>
+          <input
+            type="text"
+            value={editedTitle}
+            onChange={(e) => setEditedTitle(e.target.value)}
+            className="w-full px-4 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
+            placeholder="Enter test case title"
+            required
+          />
+          <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">Original: {testCase?.title} (TC{testCase?.id})</p>
         </div>
 
         <div>
@@ -290,8 +297,7 @@ const DuplicateTestCaseModal: React.FC<DuplicateTestCaseModalProps> = ({
                     selectedFolderId={selectedFolderId}
                     onSelectFolder={handleFolderSelect}
                     loading={false}
-                    onEditFolder={handleEditFolder}
-                    onDeleteFolder={handleDeleteFolder}
+                    showTestCaseCount={false}
                   />
                 </div>
               ) : (
@@ -318,7 +324,7 @@ const DuplicateTestCaseModal: React.FC<DuplicateTestCaseModalProps> = ({
           <Button
             type="submit"
             variant="primary"
-            disabled={isSubmitting || !selectedProjectId}
+            disabled={isSubmitting || !selectedProjectId || !editedTitle.trim()}
             icon={isSubmitting ? Loader : Copy}
           >
             {isSubmitting ? 'Duplicating...' : 'Duplicate Test Case'}
