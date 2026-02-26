@@ -1,3 +1,9 @@
+## [1.3.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.2.6...1.3.0) (2026-02-26)
+
+### Features
+
+* QR code + february feedbacks + test case sync ([721c8f9](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/721c8f9844c041a55601d50901fa51043230d8b6))
+
 ## [1.2.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.1.1...1.2.0) (2025-11-05)
 
 ### Features
