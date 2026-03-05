@@ -151,12 +151,34 @@ const transformDataToChartFormat = (apiData: ApiTestRun[]): {
     if (!dateGroups[parisDate]) {
       dateGroups[parisDate] = {};
     }
-    
-    // Process executions
-    if (testRun.attributes.executions && Array.isArray(testRun.attributes.executions)) {
-      // Group executions by test case ID + configuration ID and get the last execution per combination
-      const lastExecutionPerTestCaseConfig = new Map<string, Record<string, unknown>>();
 
+    // Process test cases and executions
+    const lastExecutionPerTestCaseConfig = new Map<string, Record<string, unknown>>();
+
+    // First, add all test cases with default "Untested" status
+    if (testRun.relationships?.testCases?.data) {
+      const configIds = testRun.relationships?.configurations?.data?.map((c: { id: string }) => c.id.split('/').pop()) || ['no-config'];
+
+      testRun.relationships.testCases.data.forEach((tc: { id: string }) => {
+        const testCaseId = tc.id.split('/').pop();
+        configIds.forEach((configId: string) => {
+          const key = `${testCaseId}-${configId}`;
+
+          // Initialize with default "Untested" if not already present
+          if (!lastExecutionPerTestCaseConfig.has(key)) {
+            lastExecutionPerTestCaseConfig.set(key, {
+              test_case_id: testCaseId,
+              configuration_id: configId === 'no-config' ? null : configId,
+              result: 6, // Untested
+              created_at: '1970-01-01T00:00:00.000Z'
+            });
+          }
+        });
+      });
+    }
+
+    // Then, override with actual executions if they exist
+    if (testRun.attributes.executions && Array.isArray(testRun.attributes.executions)) {
       testRun.attributes.executions.forEach((execution: Record<string, unknown>) => {
         const testCaseId = execution.test_case_id.toString();
         const configId = execution.configuration_id ? execution.configuration_id.toString() : 'no-config';
@@ -169,27 +191,26 @@ const transformDataToChartFormat = (apiData: ApiTestRun[]): {
           lastExecutionPerTestCaseConfig.set(key, execution);
         }
       });
-
-
-      // Count each result type from the last execution per test case + configuration
-      Array.from(lastExecutionPerTestCaseConfig.values()).forEach((execution: Record<string, unknown>) => {
-        const resultLabel = getResultLabel(execution.result);
-        
-        if (resultLabel) {
-          // Add to result labels set
-          allResultLabels.add(resultLabel);
-          
-          // Initialize count if not exists
-          if (!dateGroups[parisDate][resultLabel]) {
-            dateGroups[parisDate][resultLabel] = 0;
-          }
-          
-          // Increment count
-          dateGroups[parisDate][resultLabel]++;
-
-        }
-      });
     }
+
+    // Count each result type from the last execution per test case + configuration
+    Array.from(lastExecutionPerTestCaseConfig.values()).forEach((execution: Record<string, unknown>) => {
+      const resultLabel = getResultLabel(execution.result);
+
+      if (resultLabel) {
+        // Add to result labels set
+        allResultLabels.add(resultLabel);
+
+        // Initialize count if not exists
+        if (!dateGroups[parisDate][resultLabel]) {
+          dateGroups[parisDate][resultLabel] = 0;
+        }
+
+        // Increment count
+        dateGroups[parisDate][resultLabel]++;
+
+      }
+    });
   });
   
   

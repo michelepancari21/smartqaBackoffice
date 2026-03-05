@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Plus, FileText, Edit2, Trash2, BarChart, Search, X, Loader, Eye } from 'lucide-react';
+import { Plus, FileText, CreditCard as Edit2, Trash2, BarChart, Search, X, Loader, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLocation } from 'react-router-dom';
 import Card from '../components/UI/Card';
@@ -120,7 +120,6 @@ const Reports: React.FC = () => {
       }
 
       setIsCreateModalOpen(false);
-      toast.success('Report created and scheduled successfully');
 
     } catch (error) {
       console.error('Failed to create report:', error);

@@ -542,7 +542,11 @@ class ReportDownloadService {
           { name: 'Passed', value: reportData.testCaseBreakup.passed || 0, color: '#10B981' },
           { name: 'Failed', value: reportData.testCaseBreakup.failed || 0, color: '#EF4444' },
           { name: 'Blocked', value: reportData.testCaseBreakup.blocked || 0, color: '#F59E0B' },
-          { name: 'Untested', value: reportData.testCaseBreakup.untested || 0, color: '#6B7280' }
+          { name: 'Retest', value: reportData.testCaseBreakup.retest || 0, color: '#F97316' },
+          { name: 'Skipped', value: reportData.testCaseBreakup.skipped || 0, color: '#8B5CF6' },
+          { name: 'Untested', value: reportData.testCaseBreakup.untested || 0, color: '#6B7280' },
+          { name: 'In Progress', value: reportData.testCaseBreakup.inProgress || 0, color: '#3B82F6' },
+          { name: 'Unknown', value: reportData.testCaseBreakup.unknown || 0, color: '#4B5563' }
         ].filter(item => item.value > 0);
 
         if (pieData.length > 0) {
@@ -1497,20 +1501,11 @@ class ReportDownloadService {
       addTestCaseRow('Passed', reportData.testCaseBreakup.passed);
       addTestCaseRow('Failed', reportData.testCaseBreakup.failed);
       addTestCaseRow('Blocked', reportData.testCaseBreakup.blocked);
+      addTestCaseRow('Retest', reportData.testCaseBreakup.retest);
+      addTestCaseRow('Skipped', reportData.testCaseBreakup.skipped);
       addTestCaseRow('Untested', reportData.testCaseBreakup.untested);
-
-      if (reportData.testCaseBreakup.retest > 0) {
-        addTestCaseRow('Retest', reportData.testCaseBreakup.retest);
-      }
-      if (reportData.testCaseBreakup.skipped > 0) {
-        addTestCaseRow('Skipped', reportData.testCaseBreakup.skipped);
-      }
-      if (reportData.testCaseBreakup.inProgress > 0) {
-        addTestCaseRow('In Progress', reportData.testCaseBreakup.inProgress);
-      }
-      if (reportData.testCaseBreakup.unknown > 0) {
-        addTestCaseRow('Unknown', reportData.testCaseBreakup.unknown);
-      }
+      addTestCaseRow('In Progress', reportData.testCaseBreakup.inProgress);
+      addTestCaseRow('Unknown', reportData.testCaseBreakup.unknown);
       addRow('');
 
       // Test Runs Breakdown Section

@@ -56,6 +56,7 @@ export const useTestRunsData = (projectId: string | undefined) => {
       let actualUnknown = 0;
 
       const globalLastExecutionPerTestCaseConfigRun = new Map<string, Record<string, unknown>>();
+      const allTestCasesInActiveRuns = new Set<string>();
 
       const closedTestRuns: Array<Record<string, unknown>> = [];
 
@@ -65,6 +66,30 @@ export const useTestRunsData = (projectId: string | undefined) => {
         const isActiveTestRun = !isClosed;
 
         if (isActiveTestRun) {
+          const testRunId = apiTestRun.attributes.id.toString();
+          const configIds = apiTestRun.relationships.configurations?.data?.map(c => c.id.split('/').pop()) || ['no-config'];
+
+          if (apiTestRun.relationships.testCases?.data) {
+            apiTestRun.relationships.testCases.data.forEach(tc => {
+              const testCaseId = tc.id.split('/').pop();
+              configIds.forEach(configId => {
+                const key = `${testCaseId}-${configId}-${testRunId}`;
+                allTestCasesInActiveRuns.add(key);
+
+                if (!globalLastExecutionPerTestCaseConfigRun.has(key)) {
+                  globalLastExecutionPerTestCaseConfigRun.set(key, {
+                    test_case_id: testCaseId,
+                    configuration_id: configId === 'no-config' ? null : configId,
+                    test_run_id: testRunId,
+                    result: 6,
+                    created_at: '1970-01-01T00:00:00.000Z',
+                    updated_at: '1970-01-01T00:00:00.000Z'
+                  });
+                }
+              });
+            });
+          }
+
           if (apiTestRun.attributes.executions && Array.isArray(apiTestRun.attributes.executions)) {
             apiTestRun.attributes.executions.forEach((execution: Record<string, unknown>) => {
               const testCaseId = execution.test_case_id.toString();
