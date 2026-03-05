@@ -1,3 +1,9 @@
+## [1.4.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.3.0...1.4.0) (2026-03-05)
+
+### Features
+
+* feedbacks QA 955 and 956 ([b9178f0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/b9178f08306c274999fd471405902e7662888ce3))
+
 ## [1.3.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.2.6...1.3.0) (2026-02-26)
 
 ### Features
