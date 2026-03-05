@@ -237,7 +237,11 @@ const TestRunSummaryReport: React.FC<TestRunSummaryReportProps> = ({
         let totalPassed = 0;
         let totalFailed = 0;
         let totalBlocked = 0;
+        let totalRetest = 0;
+        let totalSkipped = 0;
         let totalUntested = 0;
+        let totalInProgress = 0;
+        let totalUnknown = 0;
 
         // IMPORTANT: Find the latest execution per test case PER test run
         // The API's execution_result filter returns test cases based on their absolute latest execution
@@ -254,16 +258,54 @@ const TestRunSummaryReport: React.FC<TestRunSummaryReportProps> = ({
           // Status filters applied
         }
 
+        // Create a set of filtered test case IDs for quick lookup
+        const filteredTestCaseIds = new Set(
+          passedReportData.testCases.map((tc) => tc.attributes.id.toString())
+        );
+
+        // Get the IDs of test runs we're interested in
+        const relevantTestRunIds = new Set(testRuns.map(tr => tr.id));
+
+        // STEP 1: Initialize ALL test cases in test runs with "Untested" status (result: 6)
+        testRuns.forEach((testRun) => {
+          // Get configurations for this test run
+          const apiTestRun = passedReportData.testRuns.find(tr => tr.attributes.id.toString() === testRun.id);
+          const configIds = apiTestRun?.relationships?.configurations?.data?.map((c: { id: string }) =>
+            c.id.split('/').pop()
+          ) || ['no-config'];
+
+          // Get test cases for this test run
+          const testCaseIds = apiTestRun?.relationships?.testCases?.data?.map((tc: { id: string }) =>
+            tc.id.split('/').pop()
+          ) || [];
+
+          // Initialize each test case + configuration combination as "Untested"
+          testCaseIds.forEach((testCaseId: string) => {
+            // Only include if this test case is in our filtered set
+            if (filteredTestCaseIds.has(testCaseId)) {
+              configIds.forEach((configId: string) => {
+                const compositeKey = `${testRun.id}-${testCaseId}-${configId}`;
+
+                // Initialize with "Untested" (result: 6)
+                if (!latestExecutionPerTestCasePerRun.has(compositeKey)) {
+                  latestExecutionPerTestCasePerRun.set(compositeKey, {
+                    attributes: {
+                      test_case_id: testCaseId,
+                      test_run_id: testRun.id,
+                      configuration_id: configId === 'no-config' ? null : configId,
+                      result: 6, // Untested
+                      created_at: new Date().toISOString(),
+                      updated_at: new Date().toISOString()
+                    }
+                  });
+                }
+              });
+            }
+          });
+        });
+
+        // STEP 2: Override with actual executions if they exist
         if (passedReportData.testExecutions && passedReportData.testExecutions.length > 0) {
-
-          // Create a set of filtered test case IDs for quick lookup
-          const filteredTestCaseIds = new Set(
-            passedReportData.testCases.map((tc) => tc.attributes.id.toString())
-          );
-
-          // Get the IDs of test runs we're interested in
-          const relevantTestRunIds = new Set(testRuns.map(tr => tr.id));
-
           passedReportData.testExecutions.forEach((execution) => {
             const testCaseId = execution.attributes.test_case_id?.toString();
             const testRunId = execution.attributes.test_run_id?.toString();
@@ -286,46 +328,41 @@ const TestRunSummaryReport: React.FC<TestRunSummaryReportProps> = ({
               }
             }
           });
-
-          // Count executions for the donut chart and totals
-          // Each entry in latestExecutionPerTestCasePerRun represents one (test case, test run) pair
-          let filteredExecutionCount = 0;
-          latestExecutionPerTestCasePerRun.forEach((execution, _compositeKey: string) => {
-            const result = execution.attributes.result;
-            const resultNum = typeof result === 'string' ? parseInt(result, 10) : result;
-
-            // If status filters are applied, only count executions matching those filters
-            if (statusFilters && !statusFilters.has(resultNum)) {
-
-              return;
-            }
-
-            // Count this execution as it passed the filter
-            filteredExecutionCount++;
-
-            // Count all executions for the donut chart and totals
-            // (Each represents one test case in one test run)
-
-            if (resultNum === 1) totalPassed++;
-            else if (resultNum === 2) totalFailed++;
-            else if (resultNum === 3) totalBlocked++;
-            else if (resultNum === 5) totalUntested++;
-            // Any other result (like 4=Retest, 6=Untested) also counts as untested
-            else totalUntested++;
-          });
-
-          // Update total test cases to be the count of (test case, test run) pairs that passed filters
-          // This represents the actual number of test case executions across all test runs
-          totalTestCases = filteredExecutionCount;
-
-        } else {
-          // Fallback: use test run totals (may be inaccurate with filters)
-
-          totalPassed = testRuns.reduce((sum, tr) => sum + tr.passedCount, 0);
-          totalFailed = testRuns.reduce((sum, tr) => sum + tr.failedCount, 0);
-          totalBlocked = testRuns.reduce((sum, tr) => sum + tr.blockedCount, 0);
-          totalUntested = Math.max(0, totalTestCases - totalPassed - totalFailed - totalBlocked);
         }
+
+        // STEP 3: Count executions for the donut chart and totals
+        // Each entry in latestExecutionPerTestCasePerRun represents one (test case, test run) pair
+        let filteredExecutionCount = 0;
+        latestExecutionPerTestCasePerRun.forEach((execution, _compositeKey: string) => {
+          const result = execution.attributes.result;
+          const resultNum = typeof result === 'string' ? parseInt(result, 10) : result;
+
+          // If status filters are applied, only count executions matching those filters
+          if (statusFilters && !statusFilters.has(resultNum)) {
+
+            return;
+          }
+
+          // Count this execution as it passed the filter
+          filteredExecutionCount++;
+
+          // Count all executions for the donut chart and totals
+          // (Each represents one test case in one test run)
+
+          if (resultNum === 1) totalPassed++;
+          else if (resultNum === 2) totalFailed++;
+          else if (resultNum === 3) totalBlocked++;
+          else if (resultNum === 4) totalRetest++;
+          else if (resultNum === 5) totalSkipped++;
+          else if (resultNum === 6) totalUntested++;
+          else if (resultNum === 7) totalInProgress++;
+          else if (resultNum === 8) totalUnknown++;
+          else totalUnknown++;
+        });
+
+        // Update total test cases to be the count of (test case, test run) pairs that passed filters
+        // This represents the actual number of test case executions across all test runs
+        totalTestCases = filteredExecutionCount;
 
         // Calculate test runs breakup by state
         const testRunsBreakup = {
@@ -418,11 +455,11 @@ const TestRunSummaryReport: React.FC<TestRunSummaryReportProps> = ({
             passed: totalPassed,
             failed: totalFailed,
             blocked: totalBlocked,
-            retest: 0,
-            skipped: 0,
+            retest: totalRetest,
+            skipped: totalSkipped,
             untested: totalUntested,
-            inProgress: 0,
-            unknown: 0
+            inProgress: totalInProgress,
+            unknown: totalUnknown
           },
           testRunsBreakup,
           assigneeResults,
@@ -508,17 +545,61 @@ const TestRunSummaryReport: React.FC<TestRunSummaryReportProps> = ({
       let totalPassed = 0;
       let totalFailed = 0;
       let totalBlocked = 0;
+      let totalRetest = 0;
+      let totalSkipped = 0;
       let totalUntested = 0;
+      let totalInProgress = 0;
+      let totalUnknown = 0;
 
       // Calculate from executions data
       const latestExecutionPerTestCasePerRun = new Map<string, { attributes: { result?: number; [key: string]: unknown } }>();
 
-      if (fetchedReportData.testExecutions && fetchedReportData.testExecutions.length > 0) {
-        const filteredTestCaseIds = new Set(
-          fetchedReportData.testCases.map((tc) => tc.attributes.id.toString())
-        );
-        const relevantTestRunIds = new Set(testRuns.map(tr => tr.id));
+      // Create a set of filtered test case IDs for quick lookup
+      const filteredTestCaseIds = new Set(
+        fetchedReportData.testCases.map((tc) => tc.attributes.id.toString())
+      );
+      const relevantTestRunIds = new Set(testRuns.map(tr => tr.id));
 
+      // STEP 1: Initialize ALL test cases in test runs with "Untested" status (result: 6)
+      testRuns.forEach((testRun) => {
+        // Get configurations for this test run
+        const apiTestRun = fetchedReportData.testRuns.find(tr => tr.attributes.id.toString() === testRun.id);
+        const configIds = apiTestRun?.relationships?.configurations?.data?.map((c: { id: string }) =>
+          c.id.split('/').pop()
+        ) || ['no-config'];
+
+        // Get test cases for this test run
+        const testCaseIds = apiTestRun?.relationships?.testCases?.data?.map((tc: { id: string }) =>
+          tc.id.split('/').pop()
+        ) || [];
+
+        // Initialize each test case + configuration combination as "Untested"
+        testCaseIds.forEach((testCaseId: string) => {
+          // Only include if this test case is in our filtered set
+          if (filteredTestCaseIds.has(testCaseId)) {
+            configIds.forEach((configId: string) => {
+              const compositeKey = `${testRun.id}-${testCaseId}-${configId}`;
+
+              // Initialize with "Untested" (result: 6)
+              if (!latestExecutionPerTestCasePerRun.has(compositeKey)) {
+                latestExecutionPerTestCasePerRun.set(compositeKey, {
+                  attributes: {
+                    test_case_id: testCaseId,
+                    test_run_id: testRun.id,
+                    configuration_id: configId === 'no-config' ? null : configId,
+                    result: 6, // Untested
+                    created_at: '1970-01-01T00:00:00.000Z',
+                    updated_at: '1970-01-01T00:00:00.000Z'
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+
+      // STEP 2: Override with actual executions if they exist
+      if (fetchedReportData.testExecutions && fetchedReportData.testExecutions.length > 0) {
         fetchedReportData.testExecutions.forEach((execution) => {
           const testCaseId = execution.attributes.test_case_id?.toString();
           const testRunId = execution.attributes.test_run_id?.toString();
@@ -540,35 +621,33 @@ const TestRunSummaryReport: React.FC<TestRunSummaryReportProps> = ({
             }
           }
         });
+      }
 
-        const statusFilterApplied = filters?.statusOfTestCase && filters.statusOfTestCase.length > 0;
-        const allowedStatusIds = statusFilterApplied ? new Set(filters!.statusOfTestCase.map(s => parseInt(s, 10))) : null;
+      const statusFilterApplied = filters?.statusOfTestCase && filters.statusOfTestCase.length > 0;
+      const allowedStatusIds = statusFilterApplied ? new Set(filters!.statusOfTestCase.map(s => parseInt(s, 10))) : null;
 
-        latestExecutionPerTestCasePerRun.forEach((execution) => {
-          const result = execution.attributes.result;
-          const resultNum = typeof result === 'string' ? parseInt(result, 10) : result;
+      latestExecutionPerTestCasePerRun.forEach((execution) => {
+        const result = execution.attributes.result;
+        const resultNum = typeof result === 'string' ? parseInt(result, 10) : result;
 
-          if (allowedStatusIds && !allowedStatusIds.has(resultNum)) {
-            return;
-          }
-
-          if (resultNum === 1) totalPassed++;
-          else if (resultNum === 2) totalFailed++;
-          else if (resultNum === 3) totalBlocked++;
-          else if (resultNum === 5) totalUntested++;
-          else totalUntested++;
-        });
-
-        totalTestCases = latestExecutionPerTestCasePerRun.size;
-        if (statusFilterApplied) {
-          totalTestCases = totalPassed + totalFailed + totalBlocked + totalUntested;
+        if (allowedStatusIds && !allowedStatusIds.has(resultNum)) {
+          return;
         }
-      } else {
-        // Fallback: use test run totals
-        totalPassed = testRuns.reduce((sum, tr) => sum + tr.passedCount, 0);
-        totalFailed = testRuns.reduce((sum, tr) => sum + tr.failedCount, 0);
-        totalBlocked = testRuns.reduce((sum, tr) => sum + tr.blockedCount, 0);
-        totalUntested = Math.max(0, totalTestCases - totalPassed - totalFailed - totalBlocked);
+
+        if (resultNum === 1) totalPassed++;
+        else if (resultNum === 2) totalFailed++;
+        else if (resultNum === 3) totalBlocked++;
+        else if (resultNum === 4) totalRetest++;
+        else if (resultNum === 5) totalSkipped++;
+        else if (resultNum === 6) totalUntested++;
+        else if (resultNum === 7) totalInProgress++;
+        else if (resultNum === 8) totalUnknown++;
+        else totalUnknown++;
+      });
+
+      totalTestCases = latestExecutionPerTestCasePerRun.size;
+      if (statusFilterApplied) {
+        totalTestCases = totalPassed + totalFailed + totalBlocked + totalRetest + totalSkipped + totalUntested + totalInProgress + totalUnknown;
       }
 
       // Calculate test runs breakup by state
@@ -647,11 +726,11 @@ const TestRunSummaryReport: React.FC<TestRunSummaryReportProps> = ({
           passed: totalPassed,
           failed: totalFailed,
           blocked: totalBlocked,
-          retest: 0,
-          skipped: 0,
+          retest: totalRetest,
+          skipped: totalSkipped,
           untested: totalUntested,
-          inProgress: 0,
-          unknown: 0
+          inProgress: totalInProgress,
+          unknown: totalUnknown
         },
         testRunsBreakup,
         assigneeResults,
@@ -788,8 +867,12 @@ const TestRunSummaryReport: React.FC<TestRunSummaryReportProps> = ({
     { name: 'Passed', value: reportData.testCaseBreakup.passed, color: '#10B981' },
     { name: 'Failed', value: reportData.testCaseBreakup.failed, color: '#EF4444' },
     { name: 'Blocked', value: reportData.testCaseBreakup.blocked, color: '#F59E0B' },
-    { name: 'Untested', value: reportData.testCaseBreakup.untested, color: '#6B7280' }
-  ].filter(item => item.value > 0);
+    { name: 'Retest', value: reportData.testCaseBreakup.retest, color: '#F97316' },
+    { name: 'Skipped', value: reportData.testCaseBreakup.skipped, color: '#8B5CF6' },
+    { name: 'Untested', value: reportData.testCaseBreakup.untested, color: '#6B7280' },
+    { name: 'In Progress', value: reportData.testCaseBreakup.inProgress, color: '#3B82F6' },
+    { name: 'Unknown', value: reportData.testCaseBreakup.unknown, color: '#4B5563' }
+  ];
 
   const testRunsBarData = [
     { name: 'New', value: reportData.testRunsBreakup.new, color: '#6B7280' },

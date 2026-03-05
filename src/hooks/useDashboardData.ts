@@ -225,6 +225,35 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
 
           devLog(`🏃 ✅ ACTIVE test run "${apiTestRun.attributes.name}" - processing executions...`);
 
+          // First, add all test cases in this test run with default "untested" status
+          const testRunId = apiTestRun.attributes.id.toString();
+          const configIds = apiTestRun.relationships.configurations?.data?.map(c => c.id.split('/').pop()) || ['no-config'];
+
+          if (apiTestRun.relationships.testCases?.data) {
+            devLog(`🏃 Found ${apiTestRun.relationships.testCases.data.length} test cases in test run`);
+            devLog(`🏃 Found ${configIds.length} configurations`);
+
+            apiTestRun.relationships.testCases.data.forEach(tc => {
+              const testCaseId = tc.id.split('/').pop();
+              configIds.forEach(configId => {
+                const key = `${testCaseId}-${configId}-${testRunId}`;
+
+                // Initialize with default "untested" (result: 6) if not already present
+                if (!globalLastExecutionPerTestCaseConfigRun.has(key)) {
+                  globalLastExecutionPerTestCaseConfigRun.set(key, {
+                    test_case_id: testCaseId,
+                    configuration_id: configId === 'no-config' ? null : configId,
+                    test_run_id: testRunId,
+                    result: 6, // Untested
+                    created_at: '1970-01-01T00:00:00.000Z',
+                    updated_at: '1970-01-01T00:00:00.000Z'
+                  });
+                  devLog(`🏃 Initialized test case ${testCaseId} with config ${configId} as untested`);
+                }
+              });
+            });
+          }
+
           // Check if this test run has executions data (it's an array of individual results)
           if (apiTestRun.attributes.executions && Array.isArray(apiTestRun.attributes.executions)) {
             devLog(`🏃 ✅ VALID executions array found for "${apiTestRun.attributes.name}"`);
@@ -241,16 +270,13 @@ export const useDashboardData = (selectedProject: Project | null, projects: Proj
               const existing = globalLastExecutionPerTestCaseConfigRun.get(key);
               if (!existing || new Date(existing.created_at) < executionDate) {
                 globalLastExecutionPerTestCaseConfigRun.set(key, execution);
+                devLog(`🏃 Updated execution for ${key} to result: ${execution.result}`);
               }
             });
 
             devLog(`🏃 Added executions from "${apiTestRun.attributes.name}" to global map`);
           } else {
-            devLog(`🏃 ❌ Test run "${apiTestRun.attributes.name}" has NO VALID executions array`);
-            devLog(`🏃    - executions value:`, apiTestRun.attributes.executions);
-            devLog(`🏃    - executions type:`, typeof apiTestRun.attributes.executions);
-            devLog(`🏃    - Is array:`, Array.isArray(apiTestRun.attributes.executions));
-            devLog(`🏃 Skipping this test run - no executions to count`);
+            devLog(`🏃 ⚠️ Test run "${apiTestRun.attributes.name}" has no explicit executions, all test cases default to untested`);
           }
         });
 
@@ -642,12 +668,38 @@ function generateClosedTestRunsBarData(closedTestRuns: Array<Record<string, unkn
       devLog(`🔍 BAR_CHART_DEBUG: Initialized month data for: ${monthKey}`);
     }
     
-    // Process executions to count each result type
+    // Process test cases and executions to count each result type
+    const lastExecutionPerTestCaseConfig = new Map<string, Record<string, unknown>>();
+
+    // First, add all test cases in this test run with default "untested" status
+    if (apiTestRun.relationships?.testCases?.data) {
+      const configIds = apiTestRun.relationships.configurations?.data?.map((c: { id: string }) => c.id.split('/').pop()) || ['no-config'];
+
+      devLog(`🔍 BAR_CHART_DEBUG: Found ${apiTestRun.relationships.testCases.data.length} test cases and ${configIds.length} configurations`);
+
+      apiTestRun.relationships.testCases.data.forEach((tc: { id: string }) => {
+        const testCaseId = tc.id.split('/').pop();
+        configIds.forEach((configId: string) => {
+          const key = `${testCaseId}-${configId}`;
+
+          // Initialize with default "untested" (result: 6) if not already present
+          if (!lastExecutionPerTestCaseConfig.has(key)) {
+            lastExecutionPerTestCaseConfig.set(key, {
+              test_case_id: testCaseId,
+              configuration_id: configId === 'no-config' ? null : configId,
+              result: 6, // Untested
+              created_at: '1970-01-01T00:00:00.000Z'
+            });
+          }
+        });
+      });
+
+      devLog(`🔍 BAR_CHART_DEBUG: Initialized ${lastExecutionPerTestCaseConfig.size} test case + configuration combinations with untested status`);
+    }
+
+    // Then, override with actual executions if they exist
     if (apiTestRun.attributes.executions && Array.isArray(apiTestRun.attributes.executions)) {
       devLog(`🔍 BAR_CHART_DEBUG: ✅ VALID executions array found with ${apiTestRun.attributes.executions.length} results`);
-
-      // Group by test case ID + configuration ID to get the latest execution per combination
-      const lastExecutionPerTestCaseConfig = new Map<string, Record<string, unknown>>();
 
       apiTestRun.attributes.executions.forEach((execution: Record<string, unknown>) => {
         const testCaseId = execution.test_case_id.toString();
@@ -661,75 +713,69 @@ function generateClosedTestRunsBarData(closedTestRuns: Array<Record<string, unkn
         }
       });
 
-      devLog(`🔍 BAR_CHART_DEBUG: Found ${lastExecutionPerTestCaseConfig.size} unique test case + configuration combinations`);
-
-      // Now process only the latest execution per test case + configuration
-      Array.from(lastExecutionPerTestCaseConfig.values()).forEach((execution: Record<string, unknown>, executionIndex: number) => {
-        devLog(`🔍 BAR_CHART_DEBUG:   Execution ${executionIndex + 1}:`, execution);
-
-        const rawResult = execution.result;
-        devLog(`🔍 BAR_CHART_DEBUG:   Raw result value: ${rawResult} (type: ${typeof rawResult})`);
-
-        let resultLabel: string;
-
-        if (typeof rawResult === 'number') {
-          // Use the TEST_RESULTS mapping and convert to lowercase
-          resultLabel = (TEST_RESULTS[rawResult as TestResultId] || 'Unknown').toLowerCase();
-          devLog(`🔍 BAR_CHART_DEBUG:   Converted numeric ${rawResult} to: ${resultLabel}`);
-        } else if (typeof rawResult === 'string') {
-          resultLabel = rawResult.toLowerCase();
-          devLog(`🔍 BAR_CHART_DEBUG:   Using string result: ${resultLabel}`);
-        } else {
-          resultLabel = 'untested';
-          devLog(`🔍 BAR_CHART_DEBUG:   Unknown result type, defaulting to: untested`);
-        }
-
-        devLog(`🔍 BAR_CHART_DEBUG:   BEFORE increment - ${monthKey} ${resultLabel}:`, monthlyData[monthKey][resultLabel as keyof typeof monthlyData[string]]);
-
-        // Count each result type
-        switch (resultLabel) {
-          case 'passed':
-            monthlyData[monthKey].passed++;
-            devLog(`🔍 BAR_CHART_DEBUG:   ✅ Incremented passed for ${monthKey}: ${monthlyData[monthKey].passed}`);
-            break;
-          case 'failed':
-            monthlyData[monthKey].failed++;
-            devLog(`🔍 BAR_CHART_DEBUG:   ❌ Incremented failed for ${monthKey}: ${monthlyData[monthKey].failed}`);
-            break;
-          case 'blocked':
-            monthlyData[monthKey].blocked++;
-            devLog(`🔍 BAR_CHART_DEBUG:   🚫 Incremented blocked for ${monthKey}: ${monthlyData[monthKey].blocked}`);
-            break;
-          case 'retest':
-            monthlyData[monthKey].retest++;
-            devLog(`🔍 BAR_CHART_DEBUG:   🔄 Incremented retest for ${monthKey}: ${monthlyData[monthKey].retest}`);
-            break;
-          case 'skipped':
-            monthlyData[monthKey].skipped++;
-            devLog(`🔍 BAR_CHART_DEBUG:   ⏭️ Incremented skipped for ${monthKey}: ${monthlyData[monthKey].skipped}`);
-            break;
-          case 'untested':
-          case 'in progress':
-          case 'unknown':
-            monthlyData[monthKey].untested++;
-            devLog(`🔍 BAR_CHART_DEBUG:   ⚪ Incremented untested (${resultLabel}) for ${monthKey}: ${monthlyData[monthKey].untested}`);
-            break;
-          default:
-            devLog(`🔍 BAR_CHART_DEBUG:   ❓ Unknown result type: ${resultLabel}, adding to untested`);
-            monthlyData[monthKey].untested++;
-        }
-
-        devLog(`🔍 BAR_CHART_DEBUG:   AFTER increment - ${monthKey} ${resultLabel}:`, monthlyData[monthKey][resultLabel as keyof typeof monthlyData[string]]);
-      });
-      
-      devLog(`🔍 BAR_CHART_DEBUG: Month data AFTER processing all caseResults for ${monthKey}:`, monthlyData[monthKey]);
-      devLog(`🔍 BAR_CHART_DEBUG: Month data AFTER processing all executions for ${monthKey}:`, monthlyData[monthKey]);
-    } else {
-      devLog(`🔍 BAR_CHART_DEBUG: ❌ NO VALID executions for test run: ${apiTestRun.attributes.name}`);
-      devLog('🔍 BAR_CHART_DEBUG:   executions value:', apiTestRun.attributes.executions);
-      devLog('🔍 BAR_CHART_DEBUG:   executions type:', typeof apiTestRun.attributes.executions);
-      devLog('🔍 BAR_CHART_DEBUG:   Is array:', Array.isArray(apiTestRun.attributes.executions));
+      devLog(`🔍 BAR_CHART_DEBUG: Final count: ${lastExecutionPerTestCaseConfig.size} unique test case + configuration combinations`);
     }
+
+    // Now process ALL test case + configuration combinations (including those defaulted to untested)
+    Array.from(lastExecutionPerTestCaseConfig.values()).forEach((execution: Record<string, unknown>, executionIndex: number) => {
+      devLog(`🔍 BAR_CHART_DEBUG:   Execution ${executionIndex + 1}:`, execution);
+
+      const rawResult = execution.result;
+      devLog(`🔍 BAR_CHART_DEBUG:   Raw result value: ${rawResult} (type: ${typeof rawResult})`);
+
+      let resultLabel: string;
+
+      if (typeof rawResult === 'number') {
+        // Use the TEST_RESULTS mapping and convert to lowercase
+        resultLabel = (TEST_RESULTS[rawResult as TestResultId] || 'Unknown').toLowerCase();
+        devLog(`🔍 BAR_CHART_DEBUG:   Converted numeric ${rawResult} to: ${resultLabel}`);
+      } else if (typeof rawResult === 'string') {
+        resultLabel = rawResult.toLowerCase();
+        devLog(`🔍 BAR_CHART_DEBUG:   Using string result: ${resultLabel}`);
+      } else {
+        resultLabel = 'untested';
+        devLog(`🔍 BAR_CHART_DEBUG:   Unknown result type, defaulting to: untested`);
+      }
+
+      devLog(`🔍 BAR_CHART_DEBUG:   BEFORE increment - ${monthKey} ${resultLabel}:`, monthlyData[monthKey][resultLabel as keyof typeof monthlyData[string]]);
+
+      // Count each result type
+      switch (resultLabel) {
+        case 'passed':
+          monthlyData[monthKey].passed++;
+          devLog(`🔍 BAR_CHART_DEBUG:   ✅ Incremented passed for ${monthKey}: ${monthlyData[monthKey].passed}`);
+          break;
+        case 'failed':
+          monthlyData[monthKey].failed++;
+          devLog(`🔍 BAR_CHART_DEBUG:   ❌ Incremented failed for ${monthKey}: ${monthlyData[monthKey].failed}`);
+          break;
+        case 'blocked':
+          monthlyData[monthKey].blocked++;
+          devLog(`🔍 BAR_CHART_DEBUG:   🚫 Incremented blocked for ${monthKey}: ${monthlyData[monthKey].blocked}`);
+          break;
+        case 'retest':
+          monthlyData[monthKey].retest++;
+          devLog(`🔍 BAR_CHART_DEBUG:   🔄 Incremented retest for ${monthKey}: ${monthlyData[monthKey].retest}`);
+          break;
+        case 'skipped':
+          monthlyData[monthKey].skipped++;
+          devLog(`🔍 BAR_CHART_DEBUG:   ⏭️ Incremented skipped for ${monthKey}: ${monthlyData[monthKey].skipped}`);
+          break;
+        case 'untested':
+        case 'in progress':
+        case 'unknown':
+          monthlyData[monthKey].untested++;
+          devLog(`🔍 BAR_CHART_DEBUG:   ⚪ Incremented untested (${resultLabel}) for ${monthKey}: ${monthlyData[monthKey].untested}`);
+          break;
+        default:
+          devLog(`🔍 BAR_CHART_DEBUG:   ❓ Unknown result type: ${resultLabel}, adding to untested`);
+          monthlyData[monthKey].untested++;
+      }
+
+      devLog(`🔍 BAR_CHART_DEBUG:   AFTER increment - ${monthKey} ${resultLabel}:`, monthlyData[monthKey][resultLabel as keyof typeof monthlyData[string]]);
+    });
+
+    devLog(`🔍 BAR_CHART_DEBUG: Month data AFTER processing all executions for ${monthKey}:`, monthlyData[monthKey]);
   });
   
   devLog('🔍 BAR_CHART_DEBUG: FINAL monthly data object before converting to array:', monthlyData);

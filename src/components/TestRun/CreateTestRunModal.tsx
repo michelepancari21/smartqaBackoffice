@@ -275,18 +275,38 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
               
               {showTestCaseSelector && (
                 <div className="bg-white dark:bg-slate-800 border border-slate-600 rounded-lg p-4">
-                  {/* Search */}
-                  <div className="relative mb-3">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 dark:text-gray-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Search test cases..."
-                      value={testCaseSearch}
-                      onChange={(e) => setTestCaseSearch(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm"
-                    />
-                  </div>
-                  
+                  {/* Search and Select All - Only show if there are available test cases */}
+                  {filteredTestCases.filter(testCase => !formData.testCaseIds.includes(testCase.id)).length > 0 && (
+                    <div className="flex gap-2 mb-3">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 dark:text-gray-400 w-4 h-4" />
+                        <input
+                          type="text"
+                          placeholder="Search test cases..."
+                          value={testCaseSearch}
+                          onChange={(e) => setTestCaseSearch(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const availableTestCaseIds = filteredTestCases
+                            .filter(testCase => !formData.testCaseIds.includes(testCase.id))
+                            .map(testCase => testCase.id);
+                          setFormData(prev => ({
+                            ...prev,
+                            testCaseIds: [...prev.testCaseIds, ...availableTestCaseIds]
+                          }));
+                        }}
+                        disabled={isSubmitting}
+                        className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm font-medium whitespace-nowrap"
+                      >
+                        Select All
+                      </button>
+                    </div>
+                  )}
+
                   {/* Test Cases List */}
                   {testCasesLoading ? (
                     <div className="flex items-center justify-center py-4">
@@ -313,7 +333,7 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
                             </div>
                           </button>
                         ))}
-                      
+
                       {filteredTestCases.filter(testCase => !formData.testCaseIds.includes(testCase.id)).length === 0 && (
                         <div className="text-center py-4 text-slate-500 dark:text-gray-400 text-sm">
                           {testCaseSearch ? 'No test cases found matching your search' : 'All available test cases are already selected'}
