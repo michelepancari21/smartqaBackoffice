@@ -77,8 +77,10 @@ class UsersApiService {
     };
   }
 
-  async getUsers(): Promise<UsersApiResponse> {
-    const response = await apiService.authenticatedRequest('/users?itemsPerPage=100&include=role');
+  async getUsers(page: number = 1, itemsPerPage: number = 30): Promise<UsersApiResponse> {
+    const response = await apiService.authenticatedRequest(
+      `/users?itemsPerPage=${itemsPerPage}&include=role&page=${page}`
+    );
     return response || this.getDefaultUsersResponse();
   }
 

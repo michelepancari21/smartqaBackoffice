@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Users, Loader, Shield } from 'lucide-react';
 import { usersApiService, User } from '../services/usersApi';
 import { Role } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { PERMISSIONS } from '../utils/permissions';
+import Pagination from '../components/UI/Pagination';
 import toast from 'react-hot-toast';
+
+const USERS_PER_PAGE = 30;
 
 const Settings: React.FC = () => {
   const { state: authState, hasPermission } = useAuth();
@@ -12,43 +15,61 @@ const Settings: React.FC = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const isSuperAdmin = authState.user?.role?.slug === 'superadmin';
   const canAccessSettings = hasPermission(PERMISSIONS.ADMIN_PANEL.READ);
+
+  const loadUsers = useCallback(async (page: number) => {
+    try {
+      setLoading(true);
+      const usersResponse = await usersApiService.getUsers(page, USERS_PER_PAGE);
+
+      const transformedUsers = usersResponse.data.map(apiUser =>
+        usersApiService.transformApiUser(apiUser, usersResponse.included)
+      );
+
+      setUsers(transformedUsers);
+      setTotalItems(usersResponse.meta.totalItems);
+
+      const lastPageLink = usersResponse.links.last;
+      const lastPageMatch = lastPageLink?.match(/page=(\d+)/);
+      const computedTotalPages = lastPageMatch
+        ? parseInt(lastPageMatch[1])
+        : Math.ceil(usersResponse.meta.totalItems / USERS_PER_PAGE);
+      setTotalPages(computedTotalPages);
+      setCurrentPage(usersResponse.meta.currentPage);
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      toast.error('Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadRoles = useCallback(async () => {
+    try {
+      const rolesResponse = await usersApiService.getRoles();
+      setRoles(rolesResponse);
+    } catch (error) {
+      console.error('Failed to load roles:', error);
+      toast.error('Failed to load roles');
+    }
+  }, []);
 
   useEffect(() => {
     if (!canAccessSettings) {
       toast.error('You do not have permission to access this page');
       return;
     }
-    loadData();
-  }, [canAccessSettings]);
+    loadUsers(1);
+    loadRoles();
+  }, [canAccessSettings, loadUsers, loadRoles]);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [usersResponse, rolesResponse] = await Promise.all([
-        usersApiService.getUsers(),
-        usersApiService.getRoles()
-      ]);
-
-      console.log('Users API Response:', usersResponse);
-      console.log('Roles API Response:', rolesResponse);
-
-      const transformedUsers = usersResponse.data.map(apiUser =>
-        usersApiService.transformApiUser(apiUser, usersResponse.included)
-      );
-
-      console.log('Transformed Users:', transformedUsers);
-
-      setUsers(transformedUsers);
-      setRoles(rolesResponse);
-    } catch (error) {
-      console.error('Failed to load data:', error);
-      toast.error('Failed to load users and roles');
-    } finally {
-      setLoading(false);
-    }
+  const handlePageChange = (page: number) => {
+    loadUsers(page);
   };
 
   const handleRoleChange = async (userId: string, newRoleId: string) => {
@@ -203,12 +224,20 @@ const Settings: React.FC = () => {
           </table>
         </div>
 
-        {users.length === 0 && (
+        {users.length === 0 && !loading && (
           <div className="p-12 text-center">
             <Users className="w-12 h-12 text-slate-400 dark:text-gray-600 mx-auto mb-3" />
             <p className="text-slate-600 dark:text-gray-400">No users found</p>
           </div>
         )}
+
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          itemsPerPage={USERS_PER_PAGE}
+          onPageChange={handlePageChange}
+        />
       </div>
     </div>
   );

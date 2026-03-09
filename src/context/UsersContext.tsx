@@ -45,21 +45,30 @@ export const UsersProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const { state: authState } = useAuth();
 
   const fetchUsers = async () => {
-    // Don't fetch if already loading or if we already have users
     if (state.loading || state.users.length > 0) {
       return;
     }
 
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      
-      const response = await usersApiService.getUsers();
-      const transformedUsers = response.data.map(apiUser => 
-        usersApiService.transformApiUser(apiUser)
-      );
-      
-      dispatch({ type: 'SET_USERS', payload: transformedUsers });
-      
+
+      const allUsers: User[] = [];
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        const response = await usersApiService.getUsers(page, 30);
+        const transformedUsers = response.data.map(apiUser =>
+          usersApiService.transformApiUser(apiUser, response.included)
+        );
+        allUsers.push(...transformedUsers);
+
+        hasMore = !!response.links.next;
+        page++;
+      }
+
+      dispatch({ type: 'SET_USERS', payload: allUsers });
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch users';
       dispatch({ type: 'SET_ERROR', payload: errorMessage });
