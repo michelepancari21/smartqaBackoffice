@@ -11,6 +11,7 @@ import { Configuration } from '../../services/configurationsApi';
 import { TestRun } from '../../services/testRunsApi';
 import { testRunsApiService } from '../../services/testRunsApi';
 import { Settings } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface EditTestRunModalProps {
   isOpen: boolean;
@@ -52,7 +53,8 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
     name: '',
     description: '',
     testCaseIds: [] as string[],
-    configurations: [] as Configuration[],
+    manualConfigurations: [] as Configuration[],
+    automatedConfigurations: [] as Configuration[],
     testPlanId: '',
     assignedTo: '',
     state: 1
@@ -60,7 +62,9 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
 
   const [testCaseSearch, setTestCaseSearch] = useState('');
   const [showTestCaseSelector, setShowTestCaseSelector] = useState(false);
-  const [existingConfigurations, setExistingConfigurations] = useState<Configuration[]>([]);
+  const [validationError, setValidationError] = useState('');
+  const [existingManualConfigurations, setExistingManualConfigurations] = useState<Configuration[]>([]);
+  const [existingAutomatedConfigurations, setExistingAutomatedConfigurations] = useState<Configuration[]>([]);
   const [isLoadingConfigurations, setIsLoadingConfigurations] = useState(false);
   const [_originalTestPlanId, setOriginalTestPlanId] = useState<string>('');
   
@@ -83,16 +87,17 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
   // Populate form when testRun changes
   useEffect(() => {
     if (isOpen && testRun) {
-
+      setValidationError('');
 
       setFormData({
         name: testRun.name,
         description: testRun.description || '',
-        testCaseIds: testRun.testCaseIds || [], // Use actual test case IDs from test run
-        configurations: [], // Will be populated from new selections only
-        testPlanId: '', // Will be loaded from API
-        assignedTo: testRun.assignedTo?.id || '', // Use assigned user ID from test run
-        state: testRun.state // Use the actual state number from the test run
+        testCaseIds: testRun.testCaseIds || [],
+        manualConfigurations: [],
+        automatedConfigurations: [],
+        testPlanId: '',
+        assignedTo: testRun.assignedTo?.id || '',
+        state: testRun.state
       });
 
 
@@ -102,22 +107,24 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
       loadExistingTestPlan(testRun.id);
 
     } else if (isOpen && !testRun) {
-      // Reset form for new test run
-      setExistingConfigurations([]);
+      setValidationError('');
+      setExistingManualConfigurations([]);
+      setExistingAutomatedConfigurations([]);
       setOriginalTestPlanId('');
-      
+
       const today = new Date();
       const dateStr = today.toLocaleDateString('en-GB', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric'
       });
-      
+
       setFormData({
         name: `Test Run-${dateStr}`,
         description: '',
         testCaseIds: [],
-        configurations: [],
+        manualConfigurations: [],
+        automatedConfigurations: [],
         testPlanId: '',
         assignedTo: '',
         state: 1
@@ -125,61 +132,72 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
     }
   }, [isOpen, testRun, users]);
 
-  // Function to load existing configurations for the test run
   const loadExistingConfigurations = async (testRunId: string) => {
     try {
       setIsLoadingConfigurations(true);
 
-      // Call GET /test_runs/{id} with configurations included
       const response = await testRunsApiService.getTestRun(testRunId);
-
-
-      // Extract configuration IDs from relationships
       const configurationRelationships = response.data.relationships?.configurations?.data || [];
 
       if (configurationRelationships.length > 0) {
-        const existingConfigurationsData: Configuration[] = [];
-        
+        const manual: Configuration[] = [];
+        const automated: Configuration[] = [];
+
         for (const configRef of configurationRelationships) {
           const configId = configRef.id.split('/').pop();
-
-          // Look for configuration in included data
           let foundConfig: Configuration | undefined;
 
           if (response.included) {
             const includedConfig = response.included.find(item =>
-              item.type === 'Configuration' && item.attributes.id.toString() === configId
+              item.type === 'Configuration' && (item.attributes as Record<string, unknown>).id?.toString() === configId
             );
 
             if (includedConfig) {
+              const attrs = includedConfig.attributes as Record<string, unknown>;
+              const rel = includedConfig.relationships as Record<string, unknown> | undefined;
+              const projectData = rel?.project != null ? (rel.project as Record<string, unknown>)?.data : undefined;
+              let projectId: string | null = null;
+
+              if (projectData != null && !Array.isArray(projectData) && typeof (projectData as { id?: string }).id === 'string') {
+                const match = /\/api\/projects\/(\d+)$/.exec((projectData as { id: string }).id);
+                projectId = match ? match[1] : null;
+              }
+              if (!projectId && attrs.project_id) {
+                projectId = attrs.project_id.toString();
+              }
+
               foundConfig = {
-                id: includedConfig.attributes.id.toString(),
-                label: includedConfig.attributes.label || 'Unknown Configuration'
+                id: (attrs.id as number).toString(),
+                label: (attrs.label as string) || 'Unknown Configuration',
+                projectId: projectId ?? undefined
               };
             }
           }
 
-          if (foundConfig) {
-            existingConfigurationsData.push(foundConfig);
-          } else {
-            console.warn('⚙️ Configuration not found in API response for ID:', configId);
-            existingConfigurationsData.push({
+          if (!foundConfig) {
+            foundConfig = {
               id: configId || '',
               label: `Configuration ${configId}`
-            });
+            };
+          }
+
+          if (foundConfig.projectId) {
+            automated.push(foundConfig);
+          } else {
+            manual.push(foundConfig);
           }
         }
-        
-        setExistingConfigurations(existingConfigurationsData);
 
+        setExistingManualConfigurations(manual);
+        setExistingAutomatedConfigurations(automated);
       } else {
-
-        setExistingConfigurations([]);
+        setExistingManualConfigurations([]);
+        setExistingAutomatedConfigurations([]);
       }
-      
     } catch (error) {
-      console.error('⚙️ ❌ Failed to load existing configurations:', error);
-      setExistingConfigurations([]);
+      console.error('Failed to load existing configurations:', error);
+      setExistingManualConfigurations([]);
+      setExistingAutomatedConfigurations([]);
     } finally {
       setIsLoadingConfigurations(false);
     }
@@ -276,9 +294,12 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
     }
   };
 
-  // Function to remove an existing configuration
-  const removeExistingConfiguration = (configToRemove: Configuration) => {
-    setExistingConfigurations(prev => prev.filter(config => config.id !== configToRemove.id));
+  const removeExistingManualConfig = (configToRemove: Configuration) => {
+    setExistingManualConfigurations(prev => prev.filter(config => config.id !== configToRemove.id));
+  };
+
+  const removeExistingAutomatedConfig = (configToRemove: Configuration) => {
+    setExistingAutomatedConfigurations(prev => prev.filter(config => config.id !== configToRemove.id));
   };
 
   // Helper function to convert status to state number
@@ -351,10 +372,19 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Handle new configurations creation first
+    setValidationError('');
+
+    const hasNonAutomatedTestCases = selectedTestCases.some(tc => tc.automationStatus !== 2);
+    const hasManualConfigs = existingManualConfigurations.length > 0 || formData.manualConfigurations.length > 0;
+
+    if (hasNonAutomatedTestCases && !hasManualConfigs) {
+      setValidationError('You have selected non-automated test cases but no manual configuration. Please add at least one manual configuration.');
+      return;
+    }
+
+    const newConfigs = [...(formData.manualConfigurations || []), ...(formData.automatedConfigurations || [])];
     const processedConfigurations = [];
-    for (const config of formData.configurations || []) {
+    for (const config of newConfigs) {
       if (config && config.id && typeof config.id === 'string' && config.id.startsWith('temp-')) {
         try {
           const newConfig = await handleCreateConfiguration(config.label);
@@ -369,11 +399,12 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
       }
     }
 
-    // Combine existing configurations with new configurations from form
-    const allConfigurations = [...existingConfigurations, ...processedConfigurations];
-    
-    // Determine the final test plan ID to send
-    // Use the current form value (which may have changed from the original)
+    const allConfigurations = [
+      ...existingManualConfigurations,
+      ...existingAutomatedConfigurations,
+      ...processedConfigurations
+    ];
+
     const finalTestPlanId = formData.testPlanId;
 
     const submitData = {
@@ -539,28 +570,26 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Column */}
           <div className="space-y-6">
-            {/* Configurations */}
+            {/* Manual Configurations */}
             <div>
               <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
-                Configurations
+                Manual Configurations
               </label>
-              
-              {/* Loading existing configurations */}
+
               {isLoadingConfigurations && (
                 <div className="flex items-center text-slate-500 dark:text-gray-400 text-sm mb-3">
                   <Loader className="w-4 h-4 mr-2 animate-spin" />
-                  Loading existing configurations...
+                  Loading configurations...
                 </div>
               )}
-              
-              {/* Display existing configurations */}
-              {!isLoadingConfigurations && existingConfigurations.length > 0 && (
+
+              {!isLoadingConfigurations && existingManualConfigurations.length > 0 && (
                 <div className="mb-3">
                   <h4 className="text-sm font-medium text-slate-500 dark:text-gray-400 mb-2">
-                    Current Configurations ({existingConfigurations.length})
+                    Current ({existingManualConfigurations.length})
                   </h4>
                   <div className="flex flex-wrap gap-2">
-                    {existingConfigurations.map((config) => (
+                    {existingManualConfigurations.map((config) => (
                       <span
                         key={config.id}
                         className="inline-flex items-center px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-sm text-blue-400"
@@ -569,10 +598,9 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
                         {config.label}
                         <button
                           type="button"
-                          onClick={() => removeExistingConfiguration(config)}
+                          onClick={() => removeExistingManualConfig(config)}
                           className="ml-2 text-blue-400 hover:text-blue-300 transition-colors"
                           disabled={isSubmitting}
-                          title="Remove configuration"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -581,17 +609,65 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
                   </div>
                 </div>
               )}
-              
+
               <ConfigurationSelector
-                selectedConfigurations={formData.configurations}
-                onConfigurationsChange={(selectedConfigurations) =>
-                  setFormData(prev => ({ ...prev, configurations: selectedConfigurations }))
+                selectedConfigurations={formData.manualConfigurations}
+                onConfigurationsChange={(configs) =>
+                  setFormData(prev => ({ ...prev, manualConfigurations: configs }))
                 }
                 onCreateConfiguration={handleCreateConfiguration}
                 disabled={isSubmitting}
-                placeholder="Add new configurations..."
+                placeholder="Add manual configurations..."
                 preloadConfigurations={isOpen}
-                excludeConfigurations={existingConfigurations}
+                excludeConfigurations={existingManualConfigurations}
+                filterMode="manual"
+              />
+            </div>
+
+            {/* Automated Configurations */}
+            <div>
+              <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
+                Automated Configurations
+              </label>
+
+              {!isLoadingConfigurations && existingAutomatedConfigurations.length > 0 && (
+                <div className="mb-3">
+                  <h4 className="text-sm font-medium text-slate-500 dark:text-gray-400 mb-2">
+                    Current ({existingAutomatedConfigurations.length})
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {existingAutomatedConfigurations.map((config) => (
+                      <span
+                        key={config.id}
+                        className="inline-flex items-center px-3 py-1 bg-green-500/20 border border-green-500/30 rounded-full text-sm text-green-400"
+                      >
+                        <Settings className="w-3 h-3 mr-1" />
+                        {config.label}
+                        <button
+                          type="button"
+                          onClick={() => removeExistingAutomatedConfig(config)}
+                          className="ml-2 text-green-400 hover:text-green-300 transition-colors"
+                          disabled={isSubmitting}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <ConfigurationSelector
+                selectedConfigurations={formData.automatedConfigurations}
+                onConfigurationsChange={(configs) =>
+                  setFormData(prev => ({ ...prev, automatedConfigurations: configs }))
+                }
+                disabled={isSubmitting}
+                placeholder="Add automated configurations..."
+                preloadConfigurations={isOpen}
+                excludeConfigurations={existingAutomatedConfigurations}
+                filterMode="automated"
+                projectId={selectedProject?.id}
               />
             </div>
 
@@ -698,17 +774,23 @@ const EditTestRunModal: React.FC<EditTestRunModalProps> = ({
           </div>
         </div>
 
+        {validationError && (
+          <div className="px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-500 dark:text-red-400">
+            {validationError}
+          </div>
+        )}
+
         {/* Footer */}
         <div className="flex justify-end space-x-3 pt-6 border-t border-slate-700">
-          <Button 
-            variant="secondary" 
-            onClick={onClose} 
+          <Button
+            variant="secondary"
+            onClick={onClose}
             disabled={isSubmitting}
           >
             Cancel
           </Button>
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             disabled={isSubmitting}
             icon={Save}
           >

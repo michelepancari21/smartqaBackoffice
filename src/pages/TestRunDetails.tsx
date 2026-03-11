@@ -1,277 +1,30 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, User, Play, CheckCircle, XCircle, Clock, AlertTriangle, Loader, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Play, CheckCircle, XCircle, Clock, AlertTriangle, Loader } from 'lucide-react';
 import { format } from 'date-fns';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
-import StatusBadge from '../components/UI/StatusBadge';
-import TagsWithTooltip from '../components/UI/TagsWithTooltip';
 import TestCaseDetailsSidebar from '../components/TestCase/TestCaseDetailsSidebar';
 import TestRunDetailsFilters from '../components/TestRun/TestRunDetailsFilters';
 import TestRunDetailsFiltersSidebar from '../components/TestRun/TestRunDetailsFiltersSidebar';
 import AddExecutionCommentModal from '../components/TestRun/AddExecutionCommentModal';
+import ConfigurationTabs, { ConfigTab } from '../components/TestRun/ConfigurationTabs';
+import TestRunDetailsTable, { TestCaseWithExecution } from '../components/TestRun/TestRunDetailsTable';
+import { apiService } from '../services/api';
 import { testRunsApiService, TestRun } from '../services/testRunsApi';
 import { testCasesApiService } from '../services/testCasesApi';
 import { testCaseExecutionsApiService } from '../services/testCaseExecutionsApi';
+import { testRunExecutionsApiService } from '../services/testRunExecutionsApi';
 import { useTestRunDetailsFilters } from '../hooks/useTestRunDetailsFilters';
+import { useTestRunExecutionPolling } from '../hooks/useTestRunExecutionPolling';
 import { useApp } from '../context/AppContext';
 import { TestCase, TEST_RESULTS, TestResultId, Tag } from '../types';
-import { getDeviceIcon, getDeviceColor } from '../utils/deviceIcons';
 import { usePermissions } from '../hooks/usePermissions';
 import { PERMISSIONS } from '../utils/permissions';
 import toast from 'react-hot-toast';
 
-// Test Result Dropdown Component
-interface TestResultDropdownProps {
-  value: TestResultId;
-  onChange: (value: TestResultId, comment?: string) => void;
-  disabled?: boolean;
-  isUpdating?: boolean;
-  testCaseTitle?: string;
-  onOpenCommentModal: (selectedResultId: TestResultId) => void;
-}
-
-const TestResultDropdown: React.FC<TestResultDropdownProps> = ({
-  value,
-  onChange,
-  disabled = false,
-  isUpdating = false,
-  testCaseTitle: _testCaseTitle = '',
-  onOpenCommentModal
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [selectedResult, setSelectedResult] = useState<TestResultId>(value);
-  const [dropdownPosition, setDropdownPosition] = useState<{ vertical: 'bottom' | 'top'; horizontal: 'left' | 'right' }>({ vertical: 'bottom', horizontal: 'left' });
-  const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const dropdownRef = React.useRef<HTMLDivElement>(null);
-  const currentResultLabel = TEST_RESULTS[value];
-
-  const calculatePosition = () => {
-    if (buttonRef.current) {
-      const buttonRect = buttonRef.current.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      const viewportWidth = window.innerWidth;
-      const modalHeight = 400;
-      const modalWidth = 320;
-
-      const spaceBelow = viewportHeight - buttonRect.bottom;
-      const spaceAbove = buttonRect.top;
-      const spaceRight = viewportWidth - buttonRect.left;
-      const spaceLeft = buttonRect.right;
-
-      const vertical = (spaceBelow < modalHeight && spaceAbove > modalHeight) ? 'top' : 'bottom';
-      const horizontal = (spaceRight < modalWidth && spaceLeft > modalWidth) ? 'right' : 'left';
-
-      setDropdownPosition({ vertical, horizontal });
-    }
-  };
-
-  const handleToggle = () => {
-    if (!disabled && !isUpdating) {
-      if (!isOpen) {
-        calculatePosition();
-      }
-      setIsOpen(!isOpen);
-    }
-  };
-
-  const getResultColor = (resultId: TestResultId): string => {
-    switch (resultId) {
-      case 1: // Passed
-        return 'bg-green-400';
-      case 2: // Failed
-        return 'bg-red-400';
-      case 3: // Blocked
-        return 'bg-yellow-400';
-      case 4: // Retest
-        return 'bg-orange-400';
-      case 5: // Skipped
-        return 'bg-purple-400';
-      case 6: // Untested
-        return 'bg-gray-400';
-      case 7: // In Progress
-        return 'bg-blue-400';
-      case 8: // Unknown
-        return 'bg-gray-500';
-      default:
-        return 'bg-gray-400';
-    }
-  };
-
-  const getStatusColor = (resultLabel: string) => {
-    switch (resultLabel) {
-      case 'Passed':
-        return 'text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
-      case 'Failed':
-        return 'text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
-      case 'Blocked':
-        return 'text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
-      case 'Retest':
-        return 'text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
-      case 'Skipped':
-        return 'text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
-      case 'Untested':
-      case 'In Progress':
-      case 'Unknown':
-        return 'text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
-      default:
-        return 'text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
-    }
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Used for UI interaction in dropdown component
-  const handleResultSelect = (newResultId: TestResultId) => {
-    setSelectedResult(newResultId);
-  };
-
-  const handleResultChange = (newResultId: TestResultId) => {
-    setSelectedResult(newResultId);
-  };
-
-  const handleQuickUpdate = () => {
-    onChange(selectedResult, undefined);
-    setIsOpen(false);
-  };
-
-  const handleOpenCommentModal = () => {
-    setIsOpen(false);
-    onOpenCommentModal(selectedResult);
-  };
-
-  // Update selectedResult when value prop changes
-  React.useEffect(() => {
-    setSelectedResult(value);
-  }, [value]);
-
-  React.useEffect(() => {
-    if (!isOpen) return;
-
-    const handleScrollOrResize = () => {
-      calculatePosition();
-    };
-
-    window.addEventListener('scroll', handleScrollOrResize, true);
-    window.addEventListener('resize', handleScrollOrResize);
-    return () => {
-      window.removeEventListener('scroll', handleScrollOrResize, true);
-      window.removeEventListener('resize', handleScrollOrResize);
-    };
-  }, [isOpen]);
-
-  return (
-    <div className="relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={handleToggle}
-        disabled={disabled || isUpdating}
-        className={`w-full px-3 py-1.5 text-xs font-medium rounded-full border focus:outline-none focus:ring-2 focus:ring-cyan-400 text-left flex items-center justify-between ${getStatusColor(currentResultLabel)} ${
-          disabled || isUpdating ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'
-        }`}
-      >
-        <div className="flex items-center">
-          <div className={`w-2 h-2 rounded-full mr-2 ${getResultColor(value)}`}></div>
-          <span>{currentResultLabel}</span>
-        </div>
-        {isUpdating ? (
-          <Loader className="w-3 h-3 animate-spin text-slate-600 dark:text-gray-400" />
-        ) : (
-          <svg className="w-3 h-3 text-slate-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        )}
-      </button>
-
-      {isOpen && !disabled && !isUpdating && (
-        <>
-          <div
-            className="fixed inset-0 z-[100]"
-            onClick={() => setIsOpen(false)}
-          />
-          <div
-            ref={dropdownRef}
-            className={`absolute bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-2xl z-[101] w-80 max-h-96 ${
-              dropdownPosition.vertical === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1'
-            } ${
-              dropdownPosition.horizontal === 'left' ? 'left-0' : 'right-0'
-            }`}
-          >
-            <div className="p-3 border-b border-slate-300 dark:border-slate-600">
-              <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-3">Select Result</h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-              {Object.entries(TEST_RESULTS).map(([resultId, label]) => (
-                <button
-                  key={resultId}
-                  type="button"
-                  onClick={() => handleResultChange(parseInt(resultId) as TestResultId)}
-                  className={`w-full px-4 py-2 text-left hover:bg-slate-100 dark:bg-slate-700 transition-colors flex items-center text-sm ${
-                    selectedResult === parseInt(resultId) 
-                      ? 'bg-cyan-600/30 border-l-4 border-cyan-400' 
-                      : ''
-                  }`}
-                >
-                  <div className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 ${getResultColor(parseInt(resultId) as TestResultId)}`}></div>
-                  <span className={`${selectedResult === parseInt(resultId) ? 'text-cyan-300 font-medium' : 'text-slate-900 dark:text-white'}`}>
-                    {label}
-                  </span>
-                  {selectedResult === parseInt(resultId) && (
-                    <span className="ml-auto text-cyan-400">✓</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="border-t border-slate-300 dark:border-slate-600 p-3">
-              <div className="flex flex-col space-y-2">
-                <button
-                  type="button"
-                  onClick={handleOpenCommentModal}
-                  className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-600 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white text-sm rounded transition-colors flex items-center justify-center"
-                >
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  Add Comment
-                </button>
-                <div className="flex justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsOpen(false)}
-                    className="px-3 py-1.5 text-xs text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleQuickUpdate}
-                    className="px-3 py-1.5 text-xs bg-cyan-600 hover:bg-cyan-700 text-slate-900 dark:text-white rounded transition-colors"
-                  >
-                    Update
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
-interface TestCaseWithExecution {
-  id: string;
-  title: string;
-  priority: string;
-  type: string;
-  executionStatus: TestResultId;
-  executionResult: string;
-  fullTestCase: TestCase | null;
-  configurationId?: string;
-  configurationLabel?: string;
-}
-
 const TestRunDetails: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id: testRunId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const testPlanIdFromUrl = searchParams.get('testPlanId') || undefined;
@@ -291,51 +44,85 @@ const TestRunDetails: React.FC = () => {
   const [updatingResults, setUpdatingResults] = useState<Set<string>>(new Set());
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
   const [selectedTestCaseForComment, setSelectedTestCaseForComment] = useState<TestCaseWithExecution | null>(null);
+  const [selectedTestCasesForBulkRun, setSelectedTestCasesForBulkRun] = useState<Set<string>>(new Set());
+  const [isBulkRunning, setIsBulkRunning] = useState(false);
+  const [gitlabLinksByTestCaseId, setGitlabLinksByTestCaseId] = useState<Record<string, string | null>>({});
+  const [gitlabLinksFetched, setGitlabLinksFetched] = useState(false);
+  const [activeConfigTab, setActiveConfigTab] = useState<ConfigTab>('manual');
 
-  // Ref to track if fetch is in progress to prevent duplicate requests
   const fetchInProgressRef = useRef(false);
 
-  // Check if test run is closed (state 6)
+  const { startPolling } = useTestRunExecutionPolling();
+
+  const isTestCaseAutomated = (testCase: TestCaseWithExecution): boolean => {
+    return testCase.fullTestCase?.automationStatus === 2;
+  };
+
   const isTestRunClosed = testRun?.state === 6;
-  // Calculate progress metrics from current test cases
+
+  const hasAutomatedConfiguration = useCallback((configurationId: string | undefined) =>
+    Boolean(testRun?.configurations?.some(c => c.id === configurationId && c.projectId)),
+  [testRun?.configurations]);
+
+  const hasAutomatedConfigs = useMemo(() =>
+    Boolean(testRun?.configurations?.some(c => c.projectId)),
+  [testRun?.configurations]);
+
+  const manualTestCases = useMemo(() =>
+    filteredTestCases.filter(tc => !hasAutomatedConfiguration(tc.configurationId)),
+  [filteredTestCases, hasAutomatedConfiguration]);
+
+  const automatedTestCases = useMemo(() =>
+    filteredTestCases.filter(tc => hasAutomatedConfiguration(tc.configurationId)),
+  [filteredTestCases, hasAutomatedConfiguration]);
+
+  const allManualTestCases = useMemo(() =>
+    testCases.filter(tc => !hasAutomatedConfiguration(tc.configurationId)),
+  [testCases, hasAutomatedConfiguration]);
+
+  const allAutomatedTestCases = useMemo(() =>
+    testCases.filter(tc => hasAutomatedConfiguration(tc.configurationId)),
+  [testCases, hasAutomatedConfiguration]);
+
+  const activeTabTestCases = hasAutomatedConfigs
+    ? (activeConfigTab === 'manual' ? manualTestCases : automatedTestCases)
+    : filteredTestCases;
+
   const calculateProgressMetrics = useCallback((currentTestCases: TestCaseWithExecution[]) => {
     const totalTests = currentTestCases.length;
-    const executedTests = currentTestCases.filter(tc => 
-      tc.executionStatus === 1 || // Passed
-      tc.executionStatus === 2 || // Failed
-      tc.executionStatus === 4    // Retest
+    const executedTests = currentTestCases.filter(tc =>
+      tc.executionStatus === 1 ||
+      tc.executionStatus === 2 ||
+      tc.executionStatus === 4
     ).length;
     const passedTests = currentTestCases.filter(tc => tc.executionStatus === 1).length;
-    
+
     const progress = totalTests > 0 ? Math.round((executedTests / totalTests) * 100) : 0;
     const passRate = executedTests > 0 ? Math.round((passedTests / executedTests) * 100) : 0;
-    
+
     return { progress, passRate, executedTests, totalTests, passedTests };
   }, []);
 
-  // Current progress metrics
   const progressMetrics = calculateProgressMetrics(testCases);
 
-  // Use filters hook
   const {
     filters,
     updateFilter,
     clearAllFilters,
-    hasActiveFilters, // eslint-disable-line @typescript-eslint/no-unused-vars -- Used in filter state logic
+    hasActiveFilters, // eslint-disable-line @typescript-eslint/no-unused-vars
     buildFilterCriteria
   } = useTestRunDetailsFilters();
 
-  // Use tags from app context
   const tags = appState.tags;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Used in loading state UI
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const tagsLoading = appState.isLoadingTags;
 
   useEffect(() => {
     let isCancelled = false;
 
     const loadData = async () => {
-      if (id && !isCancelled) {
-        await fetchTestRunDetails(id);
+      if (testRunId && !isCancelled) {
+        await fetchTestRunDetails(testRunId);
       }
     };
 
@@ -344,12 +131,46 @@ const TestRunDetails: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [id]);
+  }, [testRunId]);
+
+  useEffect(() => {
+    const projectId = testRun?.projectId;
+    if (!projectId) {
+      setGitlabLinksFetched(false);
+      setGitlabLinksByTestCaseId({});
+      return;
+    }
+    let cancelled = false;
+    apiService
+      .authenticatedRequest(`/projects/${projectId}/test-case-gitlab-links`)
+      .then((response: { data?: { automatedTestCases?: Array<{ id: string; gitlab_test_name?: string | null }> } }) => {
+        if (cancelled) return;
+        const list = response?.data?.automatedTestCases;
+        const map: Record<string, string | null> = {};
+        if (Array.isArray(list)) {
+          list.forEach((tc) => {
+            map[String(tc.id)] = tc.gitlab_test_name ?? null;
+          });
+        }
+        setGitlabLinksByTestCaseId(map);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGitlabLinksByTestCaseId({});
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setGitlabLinksFetched(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [testRun?.projectId]);
 
   const fetchTestRunDetails = async (testRunId: string) => {
-    // Prevent duplicate requests
     if (fetchInProgressRef.current) {
-
       return;
     }
 
@@ -358,7 +179,6 @@ const TestRunDetails: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch test run details with included test cases and executions
       const testRunResponse = await testRunsApiService.getTestRun(testRunId);
       const transformedTestRun = testRunsApiService.transformApiTestRun(
         testRunResponse.data,
@@ -366,27 +186,24 @@ const TestRunDetails: React.FC = () => {
       );
       setTestRun(transformedTestRun);
 
-      // Get configurations from test run
       const configurations = transformedTestRun.configurations || [];
-
-      // If no configurations, add a default empty config
       const configsToProcess = configurations.length > 0 ? configurations : [{ id: '', label: '' }];
 
-      // Get test cases from included data (raw, before transformation)
       const rawIncludedTestCases = (testRunResponse.included || [])
         .filter((item: Record<string, unknown>) => item.type === 'TestCase');
 
-      // Process test cases with executions for each configuration
+      const globalConfigs = configsToProcess.filter(c => !c.projectId);
+      const automatedConfigs = configsToProcess.filter(c => Boolean(c.projectId));
+
       const testCasesWithExecution = transformedTestRun.testCaseIds.flatMap(testCaseId => {
-        // Find the raw test case in included data - need to extract numeric ID from path
         const rawTestCase = rawIncludedTestCases.find((item: Record<string, unknown>) => {
           const itemId = typeof item.id === 'string' ? item.id.split('/').pop() : item.id?.toString();
           return itemId === testCaseId;
         });
 
         if (!rawTestCase) {
-          console.warn(`🏃 ⚠️ Test case ${testCaseId} not found in included data`);
-          return configsToProcess.map(config => ({
+          const manualOnly = globalConfigs.length > 0 ? globalConfigs : [{ id: '', label: '' }];
+          return manualOnly.map(config => ({
             id: testCaseId,
             title: `Test Case ${testCaseId}`,
             priority: 'medium',
@@ -399,22 +216,62 @@ const TestRunDetails: React.FC = () => {
           }));
         }
 
-        // Transform the test case
         const testCase = testCasesApiService.transformApiTestCase(rawTestCase, testRunResponse.included);
+        const isAutomated = testCase.automationStatus === 2;
 
-        // Get executions from the test case attributes
+        let configsForThisTestCase: typeof configsToProcess;
+        if (isAutomated) {
+          configsForThisTestCase = [...globalConfigs, ...automatedConfigs];
+        } else {
+          configsForThisTestCase = globalConfigs.length > 0 ? globalConfigs : [];
+        }
+
         const rawAttrs = rawTestCase.attributes as Record<string, unknown>;
         const executionsData = rawAttrs.executions as Array<Record<string, unknown>> | undefined;
 
-        // Create entry for each configuration
-        return configsToProcess.map(config => {
-          let executionResult: TestResultId = 6; // Default to 'Untested'
+        if (configsForThisTestCase.length === 0) {
+          let executionResult: TestResultId = 6;
+          if (executionsData && Array.isArray(executionsData) && executionsData.length > 0) {
+            const testRunExecutions = executionsData.filter((execution: Record<string, unknown>) => {
+              const executionTestRunId = execution.test_run_id?.toString() || '';
+              const expectedTestRunId = testRunId?.toString() || '';
+              return executionTestRunId === expectedTestRunId && !execution.configuration_id;
+            });
+            if (testRunExecutions.length > 0) {
+              const latestExecution = [...testRunExecutions].sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+                const aDate = new Date(a.created_at as string).getTime();
+                const bDate = new Date(b.created_at as string).getTime();
+                return bDate - aDate;
+              })[0];
+              const rawResult = latestExecution.result;
+              if (typeof rawResult === 'number') {
+                executionResult = rawResult as TestResultId;
+              } else if (typeof rawResult === 'string') {
+                const parsedInt = parseInt(rawResult);
+                if (!isNaN(parsedInt) && TEST_RESULTS[parsedInt as TestResultId]) {
+                  executionResult = parsedInt as TestResultId;
+                }
+              }
+            }
+          }
+          return [{
+            id: testCase.id,
+            title: testCase.title,
+            priority: testCase.priority,
+            type: testCase.type,
+            executionStatus: executionResult,
+            executionResult: TEST_RESULTS[executionResult],
+            fullTestCase: testCase,
+            configurationId: undefined,
+            configurationLabel: undefined
+          }];
+        }
+
+        return configsForThisTestCase.map(config => {
+          let executionResult: TestResultId = 6;
 
           if (executionsData && Array.isArray(executionsData) && executionsData.length > 0) {
-
-            // Filter executions for this test run and configuration
             const testRunExecutions = executionsData.filter((execution: Record<string, unknown>) => {
-              // Extract and normalize IDs - handle both string and number types
               const executionTestRunId = execution.test_run_id?.toString() || '';
               const executionConfigId = execution.configuration_id?.toString() || '';
               const expectedTestRunId = testRunId?.toString() || '';
@@ -429,7 +286,6 @@ const TestRunDetails: React.FC = () => {
             });
 
             if (testRunExecutions.length > 0) {
-              // Sort by created_at date and get the latest execution
               const latestExecution = testRunExecutions.sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
                 const aDate = new Date(a.created_at as string).getTime();
                 const bDate = new Date(b.created_at as string).getTime();
@@ -446,7 +302,6 @@ const TestRunDetails: React.FC = () => {
                   executionResult = parsedInt as TestResultId;
                 }
               }
-
             }
           }
 
@@ -464,8 +319,8 @@ const TestRunDetails: React.FC = () => {
         });
       });
 
-      setTestCases(testCasesWithExecution);
-      setFilteredTestCases(testCasesWithExecution);
+      setTestCases(testCasesWithExecution as TestCaseWithExecution[]);
+      setFilteredTestCases(testCasesWithExecution as TestCaseWithExecution[]);
 
     } catch (err) {
       console.error('Failed to fetch test run details:', err);
@@ -476,7 +331,7 @@ const TestRunDetails: React.FC = () => {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Used in status display rendering
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'Passed':
@@ -498,7 +353,7 @@ const TestRunDetails: React.FC = () => {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Used in status display rendering
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Passed':
@@ -535,7 +390,7 @@ const TestRunDetails: React.FC = () => {
   };
 
   const handleExecutionResultChange = async (testCaseId: string, newResultId: TestResultId, comment?: string, configurationId?: string) => {
-    if (!testRun || !id || isTestRunClosed) {
+    if (!testRun || !testRunId || isTestRunClosed) {
       if (isTestRunClosed) {
         toast.error('Cannot update execution results for closed test runs');
       }
@@ -543,28 +398,19 @@ const TestRunDetails: React.FC = () => {
     }
 
     const newResultLabel = TEST_RESULTS[newResultId];
-    const updateKey = `${testCaseId}-${configurationId || 'default'}-${id}`;
+    const updateKey = `${testCaseId}-${configurationId || 'default'}-${testRunId}`;
 
     try {
-      // Add to updating set to show loading state
       setUpdatingResults(prev => new Set([...prev, updateKey]));
 
-      // Check if this is the first execution being created for this test run
-      // Count how many test cases currently have executions (not Untested - status 6)
-      const testCasesWithExecutionsBefore = testCases.filter(tc => tc.executionStatus !== 6).length;
-      const isFirstExecution = testCasesWithExecutionsBefore === 0;
-
-      // Use new POST endpoint for test case executions
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- API response needed for error handling
-      const response = await testCaseExecutionsApiService.createTestCaseExecution({
+      await testCaseExecutionsApiService.createTestCaseExecution({
         testCaseId,
-        testRunId: id,
+        testRunId: testRunId,
         result: newResultId,
         comment: comment || undefined,
         configurationId: configurationId
       });
 
-      // Update local state to reflect the change immediately - match by both test case ID and configuration ID
       const updatedTestCases = testCases.map(tc =>
         tc.id === testCaseId && tc.configurationId === configurationId
           ? { ...tc, executionStatus: newResultId, executionResult: newResultLabel }
@@ -581,55 +427,40 @@ const TestRunDetails: React.FC = () => {
         )
       );
 
-      // Check if we need to update test run state
-      // Check if all test cases have final results (not Untested - status 6 or In Progress - status 7)
-      const allTestCasesHaveResults = updatedTestCases.every(tc => tc.executionStatus !== 6 && tc.executionStatus !== 7);
-      const totalTestCases = updatedTestCases.length;
+      const isNonTrivialResult = (status: number) => status !== 6 && status !== 7;
+      const hasAnyNonTrivialResult = updatedTestCases.some(tc => isNonTrivialResult(tc.executionStatus));
+      const allHaveNonTrivialResult = updatedTestCases.every(tc => isNonTrivialResult(tc.executionStatus));
 
-      if (allTestCasesHaveResults && testRun.state !== 5 && testRun.state !== 6) {
-        // All test cases have final results, move test run to "Done" (state 5)
-        // This will also update the test plan to "Done" via updateTestRunState
+      if (allHaveNonTrivialResult && testRun.state !== 5 && testRun.state !== 6) {
         try {
-          await testRunsApiService.updateTestRunState(id, 5, testRun.testPlanId || testPlanIdFromUrl);
+          await testRunsApiService.updateTestRunState(testRunId, 5, testRun.testPlanId || testPlanIdFromUrl);
           setTestRun({ ...testRun, state: 5 });
-
-          toast.success(`Execution result updated to ${newResultLabel}`);
         } catch (error) {
-          console.error('❌ Failed to update test run state:', error);
-          toast.success(`Execution result updated to ${newResultLabel}`);
+          console.error('Failed to update test run state:', error);
         }
-      } else if (!allTestCasesHaveResults && testRun.state === 5) {
-        // Test run was "Done" but now some test cases are untested or in progress - move back to "In Progress" (state 2)
-        // This will also update the test plan to "In Progress" via updateTestRunState
+      } else if (hasAnyNonTrivialResult && isNonTrivialResult(newResultId) && testRun.state === 1) {
         try {
-          await testRunsApiService.updateTestRunState(id, 2, testRun.testPlanId || testPlanIdFromUrl);
+          await testRunsApiService.updateTestRunState(testRunId, 2, testRun.testPlanId || testPlanIdFromUrl);
           setTestRun({ ...testRun, state: 2 });
-          toast.success(`Execution result updated to ${newResultLabel}`);
         } catch (error) {
-          console.error('❌ Failed to update test run state:', error);
-          toast.success(`Execution result updated to ${newResultLabel}`);
+          console.error('Failed to update test run state:', error);
         }
-      } else if (isFirstExecution && testRun.state === 1) {
-        // First execution created but not all have results - move to "In Progress" (state 2)
-        // This will also update the test plan to "In Progress" via updateTestRunState
+      } else if (!allHaveNonTrivialResult && testRun.state === 5) {
         try {
-          await testRunsApiService.updateTestRunState(id, 2, testRun.testPlanId || testPlanIdFromUrl);
+          await testRunsApiService.updateTestRunState(testRunId, 2, testRun.testPlanId || testPlanIdFromUrl);
           setTestRun({ ...testRun, state: 2 });
-          toast.success(`Execution result updated to ${newResultLabel}`);
         } catch (error) {
-          console.error('❌ Failed to update test run state:', error);
-          toast.success(`Execution result updated to ${newResultLabel}`);
+          console.error('Failed to update test run state:', error);
         }
-      } else {
-        toast.success(`Execution result updated to ${newResultLabel}`);
       }
 
+      toast.success(`Execution result updated to ${newResultLabel}`);
+
     } catch (error) {
-      console.error('❌ Failed to update execution result:', error);
+      console.error('Failed to update execution result:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to update execution result';
       toast.error(errorMessage);
     } finally {
-      // Remove from updating set
       setUpdatingResults(prev => {
         const newSet = new Set(prev);
         newSet.delete(updateKey);
@@ -638,12 +469,10 @@ const TestRunDetails: React.FC = () => {
     }
   };
 
-  // Filter functions
   const applyFilters = () => {
     let filtered = [...testCases];
     const criteria = buildFilterCriteria();
 
-    // Apply search filter
     if (currentSearchTerm.trim()) {
       filtered = filtered.filter(testCase =>
         testCase.title.toLowerCase().includes(currentSearchTerm.toLowerCase()) ||
@@ -651,46 +480,36 @@ const TestRunDetails: React.FC = () => {
       );
     }
 
-    // Apply automation status filter
     if (criteria.automationStatus) {
       const automationValue = parseInt(criteria.automationStatus);
       filtered = filtered.filter(testCase => {
-        // We need to get the full test case to check automation status
         return testCase.fullTestCase?.automationStatus === automationValue;
       });
     }
 
-    // Apply priority filter
     if (criteria.priority) {
       filtered = filtered.filter(testCase => {
         return testCase.priority.toLowerCase() === criteria.priority?.toLowerCase();
       });
     }
 
-    // Apply type filter
     if (criteria.type) {
       filtered = filtered.filter(testCase => {
-        // criteria.type is a numeric ID string like "1", "6", etc.
-        // testCase.fullTestCase?.typeId is the numeric ID
         const typeIdString = testCase.fullTestCase?.typeId?.toString();
         return typeIdString === criteria.type;
       });
     }
 
-    // Apply state filter
     if (criteria.state) {
       const stateValue = parseInt(criteria.state);
       filtered = filtered.filter(testCase => {
-        // Map state numbers to status strings for comparison
         const statusMap = { 1: 'active', 2: 'draft', 3: 'in_review', 4: 'outdated', 5: 'rejected' };
         const expectedStatus = statusMap[stateValue as keyof typeof statusMap];
         return testCase.fullTestCase?.status === expectedStatus;
       });
     }
 
-    // Apply result filter
     if (criteria.result) {
-      // Map string values from filter to TestResultId numbers
       const resultMap: Record<string, TestResultId> = {
         'passed': 1,
         'failed': 2,
@@ -710,14 +529,13 @@ const TestRunDetails: React.FC = () => {
       }
     }
 
-    // Apply tags filter
     if (criteria.tags && criteria.tags.length > 0) {
       const selectedTagLabels = criteria.tags.map(tag => tag.label.toLowerCase());
       filtered = filtered.filter(testCase => {
         if (!testCase.fullTestCase?.tags || testCase.fullTestCase.tags.length === 0) {
           return false;
         }
-        return testCase.fullTestCase.tags.some(tag => 
+        return testCase.fullTestCase.tags.some(tag =>
           selectedTagLabels.includes(tag.toLowerCase())
         );
       });
@@ -728,7 +546,6 @@ const TestRunDetails: React.FC = () => {
 
   const handleSearch = (term: string) => {
     setCurrentSearchTerm(term);
-    // Apply filters will be called by useEffect
   };
 
   const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -753,12 +570,223 @@ const TestRunDetails: React.FC = () => {
     return await createTag(label);
   };
 
-  // Apply filters whenever criteria change
+  const handleTestCaseCheckboxToggle = (testCaseId: string, configurationId: string | undefined) => {
+    const key = `${testCaseId}|${configurationId || 'default'}`;
+    setSelectedTestCasesForBulkRun(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllToggle = () => {
+    if (selectedTestCasesForBulkRun.size === automatedTestCasesForBulkRun.length) {
+      setSelectedTestCasesForBulkRun(new Set());
+    } else {
+      setSelectedTestCasesForBulkRun(new Set(automatedTestCasesForBulkRun.map(tc => `${tc.id}|${tc.configurationId || 'default'}`)));
+    }
+  };
+
+  const automatedTestCasesForBulkRun = useMemo(() => {
+    if (!gitlabLinksFetched) return [];
+    return filteredTestCases.filter(
+      tc =>
+        isTestCaseAutomated(tc) &&
+        Boolean(gitlabLinksByTestCaseId[String(tc.id)]) &&
+        hasAutomatedConfiguration(tc.configurationId)
+    );
+  }, [filteredTestCases, gitlabLinksFetched, gitlabLinksByTestCaseId, hasAutomatedConfiguration]);
+
+  const showCheckboxColumnForAutomated = automatedTestCases.some(tc => isTestCaseAutomated(tc)) && !isTestRunClosed && hasPermission(PERMISSIONS.TEST_RUN.UPDATE);
+
+  const showConfigurationColumn = Boolean(testRun?.configurations && testRun.configurations.length > 0);
+
+  const handleBulkRun = async () => {
+    if (!testRun || !testRunId || selectedTestCasesForBulkRun.size === 0) {
+      toast.error('Please select at least one test case to run');
+      return;
+    }
+
+    if (!testRun.configurations || testRun.configurations.length === 0) {
+      toast.error('No configurations available for this test run');
+      return;
+    }
+
+    setIsBulkRunning(true);
+
+    try {
+      const selectableKeys = new Set(automatedTestCasesForBulkRun.map(tc => `${tc.id}|${tc.configurationId || 'default'}`));
+      const selectedKeys = Array.from(selectedTestCasesForBulkRun).filter(k => selectableKeys.has(k));
+      if (selectedKeys.length === 0) {
+        toast.error('Please select at least one test case linked to GitLab to run');
+        setIsBulkRunning(false);
+        return;
+      }
+      const selectedPairs = selectedKeys.map(key => {
+        const [testCaseId, configId] = key.split('|');
+        return { testCaseId, configId: configId === 'default' ? undefined : configId };
+      });
+
+      const configurationsMap = new Map<string, { config: typeof testRun.configurations[0], testCaseIds: string[] }>();
+
+      selectedPairs.forEach(({ testCaseId, configId }) => {
+        const configKey = configId || 'default';
+
+        if (!configurationsMap.has(configKey)) {
+          const config = testRun.configurations?.find(c => c.id === configId);
+          if (config) {
+            configurationsMap.set(configKey, { config, testCaseIds: [testCaseId] });
+          }
+        } else {
+          const existing = configurationsMap.get(configKey)!;
+          if (!existing.testCaseIds.includes(testCaseId)) {
+            existing.testCaseIds.push(testCaseId);
+          }
+        }
+      });
+
+      let executionCount = 0;
+      for (const [_configId, { config, testCaseIds }] of configurationsMap) {
+        try {
+          const testRunExecution = await testRunExecutionsApiService.createTestRunExecution({
+            test_run_id: parseInt(testRunId),
+            state: 1,
+          });
+
+          await Promise.all(
+            testCaseIds.map(testCaseId =>
+              testCaseExecutionsApiService.createTestCaseExecution({
+                testCaseId,
+                testRunId: testRunId,
+                result: 7,
+                configurationId: config.id,
+                testRunExecutionId: testRunExecution.id,
+              })
+            )
+          );
+
+          setTestCases(prevTestCases => {
+            return prevTestCases.map(tc => {
+              if (testCaseIds.includes(tc.id) && tc.configurationId === config.id) {
+                return {
+                  ...tc,
+                  executionStatus: 7 as TestResultId,
+                  executionResult: TEST_RESULTS[7],
+                  execution: {
+                    ...tc.execution,
+                    result: 7,
+                    resultLabel: 'In Progress',
+                  }
+                };
+              }
+              return tc;
+            });
+          });
+
+          try {
+            await apiService.authenticatedRequest('/gitlab/trigger-pipeline', {
+              method: 'POST',
+              body: JSON.stringify({
+                test_case_ids: testCaseIds,
+                configuration_id: config.id,
+                test_run_id: testRunId,
+                test_run_execution_id: testRunExecution.id,
+              }),
+            });
+          } catch (err) {
+            console.error('Failed to trigger GitLab pipeline:', err);
+          }
+
+          const testCasesSummary = testCaseIds
+            .map(id => {
+              const tc = filteredTestCases.find(t => t.id === id);
+              return tc ? `TC-${tc.fullTestCase?.projectRelativeId ?? tc.id}` : id;
+            })
+            .join(', ');
+
+          startPolling(
+            {
+              id: testRunExecution.id,
+              testCaseId: testRunExecution.test_case_id ?? 0,
+              testCaseCode: testCasesSummary,
+              testCaseTitle: `${testCaseIds.length} test case(s) on ${config.label}`,
+              testRunId: testRunExecution.test_run_id,
+              configurationId: parseInt(config.id, 10),
+              state: testRunExecution.state ?? 1,
+              stateLabel: testRunExecution.state_label ?? 'In Progress',
+              startedAt: new Date(),
+            },
+            async () => {},
+            (testCaseExecutionUpdates) => {
+              setTestCases(prevTestCases => {
+                return prevTestCases.map(tc => {
+                  const update = testCaseExecutionUpdates.find(tce => {
+                    const testCaseIdFromUpdate = typeof tce.test_case_id === 'string'
+                      ? tce.test_case_id.split('/').pop()
+                      : String(tce.test_case_id);
+                    const configIdFromUpdate = tce.configuration_id
+                      ? (typeof tce.configuration_id === 'string'
+                          ? tce.configuration_id.split('/').pop()
+                          : String(tce.configuration_id))
+                      : undefined;
+
+                    return testCaseIdFromUpdate === tc.id && configIdFromUpdate === tc.configurationId;
+                  });
+
+                  if (update) {
+                    return {
+                      ...tc,
+                      executionStatus: update.result as TestResultId,
+                      executionResult: TEST_RESULTS[update.result as TestResultId] || update.result_label,
+                      execution: {
+                        ...tc.execution,
+                        result: update.result,
+                        resultLabel: update.result_label,
+                        comment: update.comment,
+                      }
+                    };
+                  }
+                  return tc;
+                });
+              });
+            }
+          );
+
+          executionCount++;
+        } catch (error) {
+          console.error(`Failed to start execution for configuration ${config.label}:`, error);
+          toast.error(`Failed to start execution for ${config.label}`);
+        }
+      }
+
+      toast.success(
+        `Started ${executionCount} execution(s) for ${selectedPairs.length} test case(s). You can continue using the app while tests run in the background.`,
+        { duration: 5000 }
+      );
+
+      setSelectedTestCasesForBulkRun(new Set());
+    } catch (error) {
+      console.error('Failed to start bulk executions:', error);
+      toast.error('Failed to start bulk executions');
+    } finally {
+      setIsBulkRunning(false);
+    }
+  };
+
+  const handleOpenCommentModal = (testCase: TestCaseWithExecution, selectedResultId: TestResultId) => {
+    setSelectedTestCaseForComment({ ...testCase, executionStatus: selectedResultId });
+    setIsCommentModalOpen(true);
+  };
+
   useEffect(() => {
     if (testCases.length > 0) {
       applyFilters();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyFilters would cause infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testCases, currentSearchTerm, filters]);
 
   if (loading) {
@@ -790,7 +818,6 @@ const TestRunDetails: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <Button
@@ -807,7 +834,6 @@ const TestRunDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* Test Run Overview */}
       <Card gradient className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div>
@@ -824,7 +850,7 @@ const TestRunDetails: React.FC = () => {
               </span>
             </div>
           </div>
-          
+
           <div>
             <h3 className="text-sm font-medium text-slate-600 dark:text-gray-400 mb-2">Progress</h3>
             <div className="space-y-2">
@@ -835,8 +861,8 @@ const TestRunDetails: React.FC = () => {
                 </span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2">
-                <div 
-                  className="bg-gradient-to-r from-cyan-400 to-purple-500 h-2 rounded-full"
+                <div
+                  className="bg-gradient-to-r from-cyan-400 to-blue-500 h-2 rounded-full"
                   style={{ width: `${progressMetrics.progress}%` }}
                 ></div>
               </div>
@@ -846,11 +872,11 @@ const TestRunDetails: React.FC = () => {
               </div>
             </div>
           </div>
-          
+
           <div>
             <h3 className="text-sm font-medium text-slate-600 dark:text-gray-400 mb-2">Assigned To</h3>
             <div className="flex items-center">
-              <div className="w-8 h-8 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full flex items-center justify-center mr-3">
+              <div className="w-8 h-8 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full flex items-center justify-center mr-3">
                 <User className="w-4 h-4 text-slate-900 dark:text-white" />
               </div>
               <div>
@@ -859,7 +885,7 @@ const TestRunDetails: React.FC = () => {
               </div>
             </div>
           </div>
-          
+
           <div>
             <h3 className="text-sm font-medium text-slate-600 dark:text-gray-400 mb-2">Timeline</h3>
             <div className="space-y-1 text-sm">
@@ -878,19 +904,17 @@ const TestRunDetails: React.FC = () => {
         </div>
       </Card>
 
-      {/* Test Results Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
         {(() => {
-          // Calculate counts for each result type
           const resultCounts = {
-            1: testCases.filter(tc => tc.executionStatus === 1).length, // Passed
-            2: testCases.filter(tc => tc.executionStatus === 2).length, // Failed
-            3: testCases.filter(tc => tc.executionStatus === 3).length, // Blocked
-            4: testCases.filter(tc => tc.executionStatus === 4).length, // Retest
-            5: testCases.filter(tc => tc.executionStatus === 5).length, // Skipped
-            6: testCases.filter(tc => tc.executionStatus === 6).length, // Untested
-            7: testCases.filter(tc => tc.executionStatus === 7).length, // In Progress
-            8: testCases.filter(tc => tc.executionStatus === 8).length, // Unknown
+            1: testCases.filter(tc => tc.executionStatus === 1).length,
+            2: testCases.filter(tc => tc.executionStatus === 2).length,
+            3: testCases.filter(tc => tc.executionStatus === 3).length,
+            4: testCases.filter(tc => tc.executionStatus === 4).length,
+            5: testCases.filter(tc => tc.executionStatus === 5).length,
+            6: testCases.filter(tc => tc.executionStatus === 6).length,
+            7: testCases.filter(tc => tc.executionStatus === 7).length,
+            8: testCases.filter(tc => tc.executionStatus === 8).length,
           };
 
           const getResultColor = (resultId: TestResultId): string => {
@@ -911,7 +935,7 @@ const TestRunDetails: React.FC = () => {
             const id = parseInt(resultId) as TestResultId;
             const count = resultCounts[id];
             const color = getResultColor(id);
-            
+
             return (
               <Card key={resultId} className="p-4 text-center">
                 <div className={`text-2xl font-bold mb-1 ${color}`}>{count}</div>
@@ -921,7 +945,7 @@ const TestRunDetails: React.FC = () => {
           });
         })()}
       </div>
-      {/* Test Cases Table */}
+
       <TestRunDetailsFilters
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
@@ -942,91 +966,76 @@ const TestRunDetails: React.FC = () => {
       />
 
       <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-xl shadow-lg backdrop-blur-sm transition-all duration-300 overflow-visible">
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-            Test Cases ({filteredTestCases.length}{filteredTestCases.length !== testCases.length ? ` of ${testCases.length}` : ''})
+            Test Cases ({activeTabTestCases.length}{activeTabTestCases.length !== (hasAutomatedConfigs ? (activeConfigTab === 'manual' ? allManualTestCases.length : allAutomatedTestCases.length) : testCases.length) ? ` of ${hasAutomatedConfigs ? (activeConfigTab === 'manual' ? allManualTestCases.length : allAutomatedTestCases.length) : testCases.length}` : ''})
           </h3>
-        </div>
-        
-        <div className="overflow-x-auto" style={{ overflow: 'visible' }}>
-          <table className="w-full">
-            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-              <tr>
-                <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400">ID</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400">Title</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400">Priority</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400">Type</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400">Tags</th>
-                {testRun && testRun.configurations && testRun.configurations.length > 0 && (
-                  <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400">Configuration</th>
+          {activeConfigTab === 'automated' && automatedTestCasesForBulkRun.length > 0 && !isTestRunClosed && hasPermission(PERMISSIONS.TEST_RUN.UPDATE) && (
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleSelectAllToggle}
+                className="px-3 py-1.5 text-sm text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors"
+                disabled={isBulkRunning}
+              >
+                {selectedTestCasesForBulkRun.size === automatedTestCasesForBulkRun.length ? 'Unselect All' : 'Select All'}
+              </button>
+              <Button
+                onClick={handleBulkRun}
+                disabled={selectedTestCasesForBulkRun.size === 0 || isBulkRunning}
+                className="flex items-center space-x-2"
+                icon={Play}
+              >
+                {isBulkRunning ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    <span>Starting...</span>
+                  </>
+                ) : (
+                  <span>Run Selected ({selectedTestCasesForBulkRun.size})</span>
                 )}
-                <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400">Execution Result</th>
-              </tr>
-            </thead>
-            <tbody style={{ position: 'relative', overflow: 'visible' }}>
-              {filteredTestCases.map((testCase, index) => (
-                <tr key={`${testCase.id}-${testCase.configurationId || 'default'}-${index}`} className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800/30 transition-colors" style={{ position: 'relative', overflow: 'visible' }}>
-                  <td className="py-4 px-6 text-sm text-slate-700 dark:text-gray-300 font-mono">
-                    TC-{testCase.fullTestCase?.projectRelativeId ?? testCase.id}
-                  </td>
-                  <td className="py-4 px-6">
-                    <button
-                      onClick={() => handleTestCaseTitleClick(testCase)}
-                      className="text-left w-full group"
-                      disabled={!testCase.fullTestCase}
-                    >
-                      <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors cursor-pointer">
-                        {testCase.title}
-                      </h3>
-                    </button>
-                  </td>
-                  <td className="py-4 px-6">
-                    <StatusBadge status={testCase.priority} type="priority" />
-                  </td>
-                  <td className="py-4 px-6">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/50">
-                      {testCase.type}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6">
-                    <TagsWithTooltip
-                      tags={Array.isArray(testCase.fullTestCase?.tags) ? testCase.fullTestCase.tags : []}
-                      maxVisible={2}
-                    />
-                  </td>
-                  {testRun && testRun.configurations && testRun.configurations.length > 0 && (
-                    <td className="py-4 px-6">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-gray-200 border border-slate-300 dark:border-slate-600">
-                        <span className={getDeviceColor(testCase.configurationLabel || '')}>
-                          {getDeviceIcon(testCase.configurationLabel || '')}
-                        </span>
-                        {testCase.configurationLabel || 'N/A'}
-                      </span>
-                    </td>
-                  )}
-                  <td className="py-4 px-6" style={{ position: 'relative', overflow: 'visible' }}>
-                    <div className="space-y-2">
-                      <TestResultDropdown
-                        value={testCase.executionStatus}
-                        onChange={(newResultId, comment) => handleExecutionResultChange(testCase.id, newResultId, comment, testCase.configurationId)}
-                        disabled={!hasPermission(PERMISSIONS.TEST_CASE_EXECUTION.UPDATE) || isTestRunClosed || updatingResults.has(`${testCase.id}-${testCase.configurationId || 'default'}-${testRun?.id}`)}
-                        isUpdating={updatingResults.has(`${testCase.id}-${testCase.configurationId || 'default'}-${testRun?.id}`)}
-                        testCaseTitle={testCase.title}
-                        onOpenCommentModal={(selectedResultId) => {
-                          setSelectedTestCaseForComment({ ...testCase, executionStatus: selectedResultId });
-                          setIsCommentModalOpen(true);
-                        }}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </Button>
+            </div>
+          )}
         </div>
+
+        <ConfigurationTabs
+          activeTab={activeConfigTab}
+          onTabChange={(tab) => {
+            setActiveConfigTab(tab);
+            setSelectedTestCasesForBulkRun(new Set());
+          }}
+          manualCount={manualTestCases.length}
+          automatedCount={automatedTestCases.length}
+          hasAutomatedConfigs={hasAutomatedConfigs}
+        />
+
+        <TestRunDetailsTable
+          testCases={activeTabTestCases}
+          configurations={testRun.configurations || []}
+          showCheckboxColumn={activeConfigTab === 'automated' && showCheckboxColumnForAutomated}
+          showConfigurationColumn={showConfigurationColumn}
+          selectedTestCases={selectedTestCasesForBulkRun}
+          onTestCaseCheckboxToggle={handleTestCaseCheckboxToggle}
+          onSelectAllToggle={handleSelectAllToggle}
+          selectableCount={automatedTestCasesForBulkRun.length}
+          isTestRunClosed={isTestRunClosed}
+          isBulkRunning={isBulkRunning}
+          updatingResults={updatingResults}
+          testRunId={testRunId}
+          gitlabLinksByTestCaseId={gitlabLinksByTestCaseId}
+          gitlabLinksFetched={gitlabLinksFetched}
+          isTestCaseAutomated={isTestCaseAutomated}
+          hasAutomatedConfiguration={hasAutomatedConfiguration}
+          hasPermission={hasPermission}
+          executionUpdatePermission={PERMISSIONS.TEST_CASE_EXECUTION.UPDATE}
+          onTestCaseTitleClick={handleTestCaseTitleClick}
+          onExecutionResultChange={handleExecutionResultChange}
+          onOpenCommentModal={handleOpenCommentModal}
+          activeConfigTab={activeConfigTab}
+          hasAutomatedConfigs={hasAutomatedConfigs}
+        />
       </div>
 
-      {/* Test Case Details Sidebar */}
       <TestCaseDetailsSidebar
         isOpen={isDetailsSidebarOpen}
         onClose={closeDetailsSidebar}
@@ -1035,6 +1044,7 @@ const TestRunDetails: React.FC = () => {
         testRunId={testRun?.id}
         isTestRunClosed={isTestRunClosed}
         configurationId={selectedConfigurationId}
+        isConfigurationAutomated={hasAutomatedConfiguration(selectedConfigurationId)}
         configurationLabel={selectedTestCaseForDetails ?
           testCases.find(tc => tc.id === selectedTestCaseForDetails.id && tc.configurationId === selectedConfigurationId)?.configurationLabel : undefined
         }
@@ -1046,7 +1056,6 @@ const TestRunDetails: React.FC = () => {
         }}
       />
 
-      {/* Test Run Details Filters Sidebar */}
       <TestRunDetailsFiltersSidebar
         isOpen={isFiltersSidebarOpen}
         onClose={() => setIsFiltersSidebarOpen(false)}
@@ -1062,7 +1071,6 @@ const TestRunDetails: React.FC = () => {
         onCreateTag={handleCreateTag}
       />
 
-      {/* Add Comment Modal */}
       {selectedTestCaseForComment && (
         <AddExecutionCommentModal
           isOpen={isCommentModalOpen}

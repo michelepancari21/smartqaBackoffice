@@ -11,14 +11,33 @@ export const useConfigurations = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const response = await configurationsApiService.getConfigurations();
-      const transformedConfigurations = response.data.map(apiConfiguration => 
-        configurationsApiService.transformApiConfiguration(apiConfiguration)
+
+      const firstPage = await configurationsApiService.getConfigurations();
+      let allConfigs = firstPage.data.map(c =>
+        configurationsApiService.transformApiConfiguration(c)
       );
-      
-      setConfigurations(transformedConfigurations);
-      
+
+      const { totalItems, itemsPerPage } = firstPage.meta;
+      const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+      if (totalPages > 1) {
+        const pagePromises = [];
+        for (let page = 2; page <= totalPages; page++) {
+          pagePromises.push(
+            configurationsApiService.getConfigurations(page)
+              .then(res => res.data.map(c =>
+                configurationsApiService.transformApiConfiguration(c)
+              ))
+          );
+        }
+        const rest = await Promise.all(pagePromises);
+        for (const pageConfigs of rest) {
+          allConfigs = [...allConfigs, ...pageConfigs];
+        }
+      }
+
+      setConfigurations(allConfigs);
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch configurations';
       setError(errorMessage);

@@ -28,6 +28,7 @@ export interface ApiTestRun {
       id: number;
       test_case_id: number;
       test_run_id: number;
+      configuration_id?: number;
       result: number;
       created_at: string;
       updated_at: string;
@@ -180,10 +181,14 @@ class TestRunsApiService {
     };
   }
 
+  async getAllTestRuns(page: number = 1, itemsPerPage: number = 10000): Promise<TestRunsApiResponse> {
+    const response = await apiService.authenticatedRequest(`/test_runs?include=user,testExecutions&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc`);
+    return response || this.getDefaultTestRunsResponse();
+  }
+
   async getTestRuns(projectId: string, page: number = 1, itemsPerPage: number = 30): Promise<TestRunsApiResponse> {
     // Fetch ALL test runs (both active and closed) - don't filter by state
-    // Only include user data, not full testCases and configurations to improve performance
-    const response = await apiService.authenticatedRequest(`/test_runs?project=${projectId}&include=user&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc`);
+    const response = await apiService.authenticatedRequest(`/test_runs?project=${projectId}&include=user,configurations,configurations.project,testCases&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc`);
 
     return response || this.getDefaultTestRunsResponse();
   }
@@ -191,18 +196,18 @@ class TestRunsApiService {
   async searchTestRuns(searchTerm: string, projectId: string, page: number = 1, itemsPerPage: number = 30): Promise<TestRunsApiResponse> {
     const isNumeric = /^\d+$/.test(searchTerm.trim());
     const searchParam = isNumeric ? `id=${encodeURIComponent(searchTerm)}` : `name=${encodeURIComponent(searchTerm)}`;
-    
-    const response = await apiService.authenticatedRequest(`/test_runs?project=${projectId}&include=user&${searchParam}&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc`);
+
+    const response = await apiService.authenticatedRequest(`/test_runs?project=${projectId}&include=user,configurations,configurations.project,testCases&${searchParam}&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc`);
     return response || this.getDefaultTestRunsResponse();
   }
 
   async filterTestRunsByAssignee(assigneeId: string, projectId: string, page: number = 1, itemsPerPage: number = 30): Promise<TestRunsApiResponse> {
-    const response = await apiService.authenticatedRequest(`/test_runs?project=${projectId}&user=${assigneeId}&include=user&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc`);
+    const response = await apiService.authenticatedRequest(`/test_runs?project=${projectId}&user=${assigneeId}&include=user,configurations,configurations.project,testCases&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc`);
     return response || this.getDefaultTestRunsResponse();
   }
 
   async filterTestRunsByState(state: string, projectId: string, page: number = 1, itemsPerPage: number = 30): Promise<TestRunsApiResponse> {
-    const response = await apiService.authenticatedRequest(`/test_runs?project=${projectId}&state=${state}&include=user&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc`);
+    const response = await apiService.authenticatedRequest(`/test_runs?project=${projectId}&state=${state}&include=user,configurations,configurations.project,testCases&page=${page}&itemsPerPage=${itemsPerPage}&order[createdAt]=desc`);
     return response || this.getDefaultTestRunsResponse();
   }
 
@@ -212,7 +217,7 @@ class TestRunsApiService {
   }, projectId: string, page: number = 1, itemsPerPage: number = 30): Promise<TestRunsApiResponse> {
     const params = new URLSearchParams();
     params.set('project', projectId);
-    params.set('include', 'user');
+    params.set('include', 'user,configurations,configurations.project,testCases');
     params.set('page', page.toString());
     params.set('itemsPerPage', itemsPerPage.toString());
     params.set('order[createdAt]', 'desc');
@@ -231,7 +236,7 @@ class TestRunsApiService {
 
   async getTestRun(id: string): Promise<{ data: ApiTestRun; included?: Array<Record<string, unknown>> }> {
 
-    const response = await apiService.authenticatedRequest(`/test_runs/${id}?include=user,configurations,testPlans,testCases,testCases.tags`);
+    const response = await apiService.authenticatedRequest(`/test_runs/${id}?include=user,configurations,configurations.project,testPlans,testCases,testCases.tags`);
 
     return response;
   }
@@ -305,7 +310,7 @@ class TestRunsApiService {
       };
     }
 
-    const response = await apiService.authenticatedRequest('/test_runs?include=user', {
+    const response = await apiService.authenticatedRequest('/test_runs?include=user,configurations,configurations.project,testCases', {
       method: 'POST',
       body: JSON.stringify(requestBody),
     });
@@ -370,7 +375,7 @@ class TestRunsApiService {
       // No test plan ID provided
     }
 
-    const response = await apiService.authenticatedRequest(`/test_runs/${id}?include=user`, {
+    const response = await apiService.authenticatedRequest(`/test_runs/${id}?include=user,configurations,configurations.project,testCases`, {
       method: 'PATCH',
       body: JSON.stringify(requestBody),
     });
@@ -402,7 +407,7 @@ class TestRunsApiService {
       }
     };
 
-    const response = await apiService.authenticatedRequest(`/test_runs/${id}?include=user`, {
+    const response = await apiService.authenticatedRequest(`/test_runs/${id}?include=user,configurations,configurations.project,testCases`, {
       method: 'PATCH',
       body: JSON.stringify(requestBody),
     });
@@ -430,7 +435,7 @@ class TestRunsApiService {
       }
     };
 
-    const response = await apiService.authenticatedRequest(`/test_runs/${id}?include=user`, {
+    const response = await apiService.authenticatedRequest(`/test_runs/${id}?include=user,configurations,configurations.project,testCases`, {
       method: 'PATCH',
       body: JSON.stringify(requestBody),
     });
@@ -558,33 +563,68 @@ class TestRunsApiService {
         const configId = configRef.id.split('/').pop();
 
         if (configId) {
-          const includedConfig = included?.find(item =>
-            item.type === 'Configuration' && item.attributes.id.toString() === configId
-          );
+          const includedConfig = included?.find((item: Record<string, unknown>) =>
+            item.type === 'Configuration' && (item.attributes as Record<string, unknown>)?.id?.toString() === configId
+          ) as Record<string, unknown> | undefined;
+
+          const attrs = includedConfig?.attributes as Record<string, unknown> | undefined;
+          const rel = includedConfig?.relationships as Record<string, unknown> | undefined;
+          const projectData = rel?.project != null ? (rel.project as Record<string, unknown>)?.data : undefined;
+          let projectId: string | null = null;
+
+          // Try to get project ID from relationships first
+          if (projectData != null && !Array.isArray(projectData) && typeof (projectData as { id?: string }).id === 'string') {
+            const match = /\/api\/projects\/(\d+)$/.exec((projectData as { id: string }).id);
+            projectId = match ? match[1] : null;
+          }
+
+          // Fall back to attributes if not found in relationships
+          if (!projectId && attrs?.project_id) {
+            projectId = attrs.project_id.toString();
+          }
 
           configurations.push({
             id: configId,
-            label: includedConfig?.attributes.label || 'Unknown Configuration'
+            label: attrs?.label as string || 'Unknown Configuration',
+            userAgent: attrs?.userAgent as string | undefined,
+            projectId: projectId ?? undefined
           });
         }
       }
     }
 
-    // Calculate actual configuration count from executions if available
-    // This ensures we count the actual configurations being tested
-    let actualConfigCount = configurations.length;
-    if (apiTestRun.attributes.executions && Array.isArray(apiTestRun.attributes.executions)) {
-      const uniqueConfigs = new Set<string>();
-      apiTestRun.attributes.executions.forEach((execution: Record<string, unknown>) => {
-        const configId = execution.configuration_id ? execution.configuration_id.toString() : 'no-config';
-        uniqueConfigs.add(configId);
-      });
-      actualConfigCount = Math.max(uniqueConfigs.size, configurations.length);
-    }
+    // Calculate expected combinations:
+    // Automated TCs: rows for ALL configs (manual + automated)
+    // Non-automated TCs: rows for manual (global) configs only
+    let expectedTotalCombinations = 0;
 
-    // Calculate expected total combinations: test cases × configurations (or just test cases if no configs)
-    const configCount = actualConfigCount > 0 ? actualConfigCount : 1;
-    const expectedTotalCombinations = testCaseIds.length * configCount;
+    const rawIncludedTestCases = included?.filter((item: Record<string, unknown>) => item.type === 'TestCase') || [];
+    const automatedConfigsCount = configurations.filter(c => c.projectId).length;
+    const globalConfigsCount = configurations.filter(c => !c.projectId).length;
+    const totalConfigsCount = globalConfigsCount + automatedConfigsCount;
+
+    testCaseIds.forEach(testCaseId => {
+      const rawTestCase = rawIncludedTestCases.find((item: Record<string, unknown>) => {
+        const topLevelId = typeof item.id === 'string' ? item.id.split('/').pop() : item.id?.toString();
+        const attrs = item.attributes as Record<string, unknown> | undefined;
+        const attrId = attrs?.id?.toString();
+        return topLevelId === testCaseId || attrId === testCaseId;
+      });
+
+      if (rawTestCase) {
+        const attrs = rawTestCase.attributes as Record<string, unknown>;
+        const automationValue = typeof attrs.automation === 'string' ? parseInt(attrs.automation, 10) : attrs.automation;
+        const isAutomated = automationValue === 2;
+
+        if (isAutomated) {
+          expectedTotalCombinations += totalConfigsCount > 0 ? totalConfigsCount : 1;
+        } else {
+          expectedTotalCombinations += globalConfigsCount > 0 ? globalConfigsCount : 1;
+        }
+      } else {
+        expectedTotalCombinations += globalConfigsCount > 0 ? globalConfigsCount : 1;
+      }
+    });
 
     // Process caseResults array to get real execution statistics
     // Process executions array to get real execution statistics
@@ -683,10 +723,6 @@ class TestRunsApiService {
       // Executed = combinations with result 1 (Passed), 2 (Failed), or 4 (Retest)
       executedCount = passedCount + failedCount + retestCount;
 
-      // Calculate how many combinations have no execution (expected - those with executions)
-      const combinationsWithNoExecution = expectedTotalCombinations - lastExecutionPerTestCaseConfig.size;
-      untestedCount += combinationsWithNoExecution;
-
       // Progress = executed combinations / expected total combinations
       progress = expectedTotalCombinations > 0 ? Math.round((executedCount / expectedTotalCombinations) * 100) : 0;
 
@@ -694,7 +730,6 @@ class TestRunsApiService {
       passRate = executedCount > 0 ? Math.round((passedCount / executedCount) * 100) : 0;
 
     } else {
-
       // If no executions, all combinations are untested
       untestedCount = expectedTotalCombinations;
     }

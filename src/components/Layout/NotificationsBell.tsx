@@ -8,8 +8,8 @@ function formatNotificationMessage(item: NotificationItem): { message: string; d
   const { type, data } = item.attributes;
 
   if (type === 'test_run_execution_ended' && data) {
-    const typedData = data as { test_run_id?: string | number; project_id?: string | number; test_run_execution_id?: string | number };
-    const testRunId = typedData.test_run_id;
+    const typedData = data as { test_run_id?: string | number; testRunId?: number; id?: number; project_id?: string | number; test_run_execution_id?: string | number };
+    const testRunId = typedData.test_run_id ?? typedData.testRunId ?? typedData.id;
     const projectId = typedData.project_id;
     const executionId = typedData.test_run_execution_id;
 
@@ -152,7 +152,7 @@ const NotificationsBell: React.FC = () => {
                         <Link
                           to={link}
                           onClick={() => handleNotificationClick(item)}
-                          className="block text-sm text-slate-700 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400"
+                          className={`block text-sm text-slate-700 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 ${isUnread ? 'font-medium' : ''}`}
                         >
                           {content}
                         </Link>

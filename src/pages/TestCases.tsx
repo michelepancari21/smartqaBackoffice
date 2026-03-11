@@ -132,6 +132,46 @@ const TestCases: React.FC = () => {
     edgeSize: 150
   });
 
+  // Fetch GitLab test case links for the selected project (for automated TC link indicator)
+  React.useEffect(() => {
+    const project = selectedProject;
+    if (!project?.id) {
+      setGitlabLinksFetched(false);
+      setGitlabLinksByTestCaseId({});
+      return;
+    }
+    if (!project.gitlab_project_name || !project.test_suite_name) {
+      setGitlabLinksFetched(true);
+      setGitlabLinksByTestCaseId({});
+      return;
+    }
+    let cancelled = false;
+    setGitlabLinksFetched(false);
+    apiService
+      .authenticatedRequest(`/projects/${project.id}/test-case-gitlab-links`)
+      .then((response: { data?: { automatedTestCases?: Array<{ id: string; gitlab_test_name?: string | null }> } }) => {
+        if (cancelled) return;
+        const list = response?.data?.automatedTestCases;
+        const map: Record<string, string | null> = {};
+        if (Array.isArray(list)) {
+          list.forEach((tc) => {
+            map[tc.id] = tc.gitlab_test_name ?? null;
+          });
+        }
+        setGitlabLinksByTestCaseId(map);
+        setGitlabLinksFetched(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGitlabLinksByTestCaseId({});
+          setGitlabLinksFetched(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProject?.id, selectedProject?.gitlab_project_name, selectedProject?.test_suite_name]);
+
   const selectedFolder = getSelectedFolder();
 
   const handleToggleColumn = useCallback((column: keyof ColumnVisibility) => {

@@ -1,11 +1,13 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, ToastBar, toast } from 'react-hot-toast';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
 import { LoadingProvider } from './context/LoadingContext';
 import { UsersProvider } from './context/UsersContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { NotificationsProvider } from './context/NotificationsContext';
+import { TestRunExecutionPollingProvider } from './context/TestRunExecutionPollingContext';
 import GlobalLoader from './components/UI/GlobalLoader';
 import { useLoading } from './context/LoadingContext';
 import Layout from './components/Layout/Layout';
@@ -14,6 +16,7 @@ import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Callback from './pages/Callback';
 import Dashboard from './pages/Dashboard';
+import Overview from './pages/Overview';
 import Projects from './pages/Projects';
 import TestCases from './pages/TestCases';
 import SharedSteps from './pages/SharedSteps';
@@ -25,6 +28,8 @@ import TestPlanDetails from './pages/TestPlanDetails';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import UploadFromPhonePage from './pages/UploadFromPhonePage';
+import AutomatedExecutionTestCases from './pages/AutomatedExecutionTestCases';
+import AutomatedExecutionSteps from './pages/AutomatedExecutionSteps';
 
 const AppContent: React.FC = () => {
   const { loading } = useLoading();
@@ -44,6 +49,7 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }>
               <Route path="dashboard" element={<Dashboard key={`dashboard-${Date.now()}`} />} />
+              <Route path="overview" element={<Overview />} />
               <Route path="projects" element={<Projects />} />
               <Route path="test-cases" element={<TestCases />} />
               <Route path="shared-steps" element={<SharedSteps />} />
@@ -54,6 +60,8 @@ const AppContent: React.FC = () => {
               <Route path="test-plans/:id" element={<TestPlanDetails />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="automated-execution/:projectId" element={<AutomatedExecutionTestCases />} />
+              <Route path="automated-execution/:projectId/test-case/:testCaseId" element={<AutomatedExecutionSteps />} />
             </Route>
           </Routes>
           <Toaster
@@ -67,7 +75,28 @@ const AppContent: React.FC = () => {
                 border: '1px solid rgb(var(--color-border-primary))'
               }
             }}
-          />
+          >
+            {(t) => (
+              <ToastBar toast={t}>
+                {({ icon, message }) => (
+                  <>
+                    {icon}
+                    <span className="flex-1">{message}</span>
+                    {t.type !== 'loading' && (
+                      <button
+                        type="button"
+                        onClick={() => toast.dismiss(t.id)}
+                        className="ml-2 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                        aria-label="Dismiss"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </>
+                )}
+              </ToastBar>
+            )}
+          </Toaster>
         </div>
       </Router>
       <GlobalLoader isVisible={loading.isLoading} message={loading.message} />
@@ -82,7 +111,11 @@ function App() {
         <UsersProvider>
           <AppProvider>
             <LoadingProvider>
-              <AppContent />
+              <NotificationsProvider>
+                <TestRunExecutionPollingProvider>
+                  <AppContent />
+                </TestRunExecutionPollingProvider>
+              </NotificationsProvider>
             </LoadingProvider>
           </AppProvider>
         </UsersProvider>

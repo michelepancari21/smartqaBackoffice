@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Plus, SquarePen, Trash2, ChevronLeft, ChevronRight, Loader, Play, Clock, CheckCircle, User, Copy, Activity, Archive } from 'lucide-react';
 // import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -76,7 +76,6 @@ const TestRuns: React.FC = () => {
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [testRunToClose, setTestRunToClose] = useState<TestRun | null>(null);
   const [activeTab, setActiveTab] = useState<'active' | 'closed'>('active');
-
   const handleSearch = useCallback(async (term: string) => {
     setCurrentSearchTerm(term);
     if (term.trim()) {
@@ -577,13 +576,13 @@ const TestRuns: React.FC = () => {
           />
 
           {/* Test Runs Table */}
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden relative">
             {loading && (
-              <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">
-                <Loader className="w-6 h-6 text-cyan-400 animate-spin" />
+              <div className="absolute top-4 right-4 z-10 pointer-events-none">
+                <Loader className="w-5 h-5 text-cyan-400 animate-spin" />
               </div>
             )}
-            
+
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">

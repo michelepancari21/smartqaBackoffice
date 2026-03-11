@@ -24,6 +24,7 @@ interface TestCaseDetailsSidebarProps {
   isTestRunClosed?: boolean;
   currentExecutionResult?: TestResultId;
   configurationId?: string;
+  isConfigurationAutomated?: boolean;
   configurationLabel?: string;
   onExecutionResultChange?: (testCaseId: string, testRunId: string, newResultId: TestResultId) => void;
   onAttachmentRemoved?: () => void;
@@ -396,6 +397,7 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
   isTestRunClosed = false,
   currentExecutionResult,
   configurationId,
+  isConfigurationAutomated = false,
   configurationLabel,
   onExecutionResultChange,
   onAttachmentRemoved,
@@ -1058,7 +1060,7 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                       <TestResultDropdown
                         value={currentExecutionResult}
                         onChange={handleExecutionResultChange}
-                        disabled={!hasPermission(PERMISSIONS.TEST_CASE_EXECUTION.UPDATE) || isUpdatingResult}
+                        disabled={!hasPermission(PERMISSIONS.TEST_CASE_EXECUTION.UPDATE) || isUpdatingResult || (testCaseDetails?.automationStatus === 2 && isConfigurationAutomated)}
                         isUpdating={isUpdatingResult}
                         testCaseTitle={testCase?.title || ''}
                         onOpenCommentModal={(selectedResultId) => {
@@ -1067,7 +1069,9 @@ const TestCaseDetailsSidebar: React.FC<TestCaseDetailsSidebarProps> = ({
                         }}
                       />
                       <p className="text-xs text-slate-600 dark:text-gray-400 mt-2">
-                        {hasPermission(PERMISSIONS.TEST_CASE_EXECUTION.UPDATE)
+                        {testCaseDetails?.automationStatus === 2 && isConfigurationAutomated
+                          ? 'Execution results for automated test cases with automated configurations cannot be manually edited'
+                          : hasPermission(PERMISSIONS.TEST_CASE_EXECUTION.UPDATE)
                           ? 'Update the execution result for this test case in the current test run'
                           : 'You do not have permission to update test execution results'}
                       </p>
