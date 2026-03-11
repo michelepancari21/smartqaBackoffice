@@ -11,6 +11,8 @@ interface ConfigurationSelectorProps {
   placeholder?: string;
   preloadConfigurations?: boolean;
   excludeConfigurations?: Configuration[];
+  filterMode?: 'all' | 'manual' | 'automated';
+  projectId?: string;
 }
 
 const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
@@ -20,7 +22,9 @@ const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
   disabled = false,
   placeholder = 'Select configurations...',
   preloadConfigurations = false,
-  excludeConfigurations = []
+  excludeConfigurations = [],
+  filterMode = 'all',
+  projectId
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -100,8 +104,8 @@ const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
         const pagePromises = [];
         for (let page = 2; page <= totalPages; page++) {
           pagePromises.push(
-            configurationsApiService.getConfigurations()
-              .then(response => response.data.map(apiConfig => 
+            configurationsApiService.getConfigurations(page)
+              .then(response => response.data.map(apiConfig =>
                 configurationsApiService.transformApiConfiguration(apiConfig)
               ))
           );
@@ -155,15 +159,24 @@ const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
     }
   }, [isOpen, preloadConfigurations]);
 
-  // Filter configurations based on search term and exclude already selected or excluded
-  const filteredConfigurations = (configurations || []).filter(config =>
-    config && config.label &&
-    !selectedConfigurations.some(selected => selected && selected.id === config.id) &&
-    !excludeConfigurations.some(excluded => excluded && excluded.id === config.id)
-  );
+  const filteredConfigurations = (configurations || []).filter(config => {
+    if (!config || !config.label) return false;
+    if (selectedConfigurations.some(selected => selected && selected.id === config.id)) return false;
+    if (excludeConfigurations.some(excluded => excluded && excluded.id === config.id)) return false;
+    if (filterMode === 'manual') return !config.projectId;
+    if (filterMode === 'automated') return config.projectId != null && (!projectId || config.projectId === projectId);
+    return true;
+  });
 
-  // Check if search term would create a new configuration
-  const canCreateNew = searchTerm.trim() &&
+  const sortedFilteredConfigurations = filterMode === 'all'
+    ? [...filteredConfigurations].sort((a, b) => {
+        const aGlobal = !a.projectId ? 0 : 1;
+        const bGlobal = !b.projectId ? 0 : 1;
+        return aGlobal - bGlobal;
+      })
+    : filteredConfigurations;
+
+  const canCreateNew = filterMode !== 'automated' && searchTerm.trim() &&
     !(allConfigurations || []).some(config => config.label.toLowerCase() === searchTerm.toLowerCase()) &&
     !selectedConfigurations.some(config => config.label.toLowerCase() === searchTerm.toLowerCase()) &&
     !excludeConfigurations.some(config => config.label.toLowerCase() === searchTerm.toLowerCase()) &&
@@ -220,13 +233,24 @@ const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
       {/* Selected Configurations */}
       {selectedConfigurations.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
-          {selectedConfigurations.map((config) => (
+          {selectedConfigurations.map((config) => {
+            const isGlobal = !config.projectId;
+            return (
             <span
               key={config.id}
-              className="inline-flex items-center px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-sm text-blue-400"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-sm text-blue-400"
             >
-              <ConfigIcon className="w-3 h-3 mr-1" />
-              {config.label}
+              <ConfigIcon className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">{config.label}</span>
+              {filterMode === 'all' && (
+                <span
+                  className={`flex-shrink-0 text-xs px-1.5 py-0.5 rounded ${
+                    isGlobal ? 'bg-slate-500/30 text-slate-300' : 'bg-green-500/30 text-green-300'
+                  }`}
+                >
+                  {isGlobal ? 'Global' : 'Automated'}
+                </span>
+              )}
               {!disabled && (
                 <button
                   type="button"
@@ -237,7 +261,8 @@ const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
                 </button>
               )}
             </span>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -328,25 +353,41 @@ const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
                 </button>
 
                 {/* Configuration options */}
-                {filteredConfigurations.length > 0 ? (
-                  filteredConfigurations.map((config) => (
-                    <button
-                      key={config.id}
-                      type="button"
-                      onClick={() => handleConfigurationSelect(config)}
-                      className={`w-full px-4 py-3 text-left hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${
-                        selectedConfigurations.some(selected => selected.id === config.id) ? 'bg-slate-200 dark:bg-slate-700 text-cyan-600 dark:text-cyan-400' : 'text-slate-900 dark:text-white'
-                      }`}
-                    >
-                      <div className="flex items-center">
-                        <ConfigIcon className="w-4 h-4 mr-2 text-slate-400 dark:text-gray-400" />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{config.label}</div>
-                          <div className="text-xs text-slate-500 dark:text-gray-400">ID: {config.id}</div>
+                {sortedFilteredConfigurations.length > 0 ? (
+                  sortedFilteredConfigurations.map((config) => {
+                    const isGlobal = !config.projectId;
+                    return (
+                      <button
+                        key={config.id}
+                        type="button"
+                        onClick={() => handleConfigurationSelect(config)}
+                        className={`w-full px-4 py-3 text-left hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${
+                          selectedConfigurations.some(selected => selected.id === config.id) ? 'bg-slate-200 dark:bg-slate-700 text-cyan-600 dark:text-cyan-400' : 'text-slate-900 dark:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          <ConfigIcon className="w-4 h-4 mr-2 text-slate-400 dark:text-gray-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">{config.label}</div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {filterMode === 'all' && (
+                                <span
+                                  className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                                    isGlobal
+                                      ? 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                                      : 'bg-green-500/20 text-green-600 dark:text-green-400'
+                                  }`}
+                                >
+                                  {isGlobal ? 'Global' : 'Automated'}
+                                </span>
+                              )}
+                              <span className="text-xs text-slate-500 dark:text-gray-400">ID: {config.id}</span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))
+                      </button>
+                    );
+                  })
                 ) : (
                   <div className="px-4 py-3 text-slate-500 dark:text-gray-400 text-sm">
                     {searchTerm ? `No configurations found matching "${searchTerm}"` : 'No configurations available'}

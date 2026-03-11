@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTestCases } from '../../hooks/useTestCases';
 import { useApp } from '../../context/AppContext';
 import { Configuration } from '../../services/configurationsApi';
+import toast from 'react-hot-toast';
 
 interface CreateTestRunModalProps {
   isOpen: boolean;
@@ -50,7 +51,8 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
     name: '',
     description: '',
     testCaseIds: [] as string[],
-    configurations: [] as Configuration[],
+    manualConfigurations: [] as Configuration[],
+    automatedConfigurations: [] as Configuration[],
     testPlanId: '',
     assignedTo: '',
     state: 'new'
@@ -58,6 +60,7 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
 
   const [testCaseSearch, setTestCaseSearch] = useState('');
   const [showTestCaseSelector, setShowTestCaseSelector] = useState(false);
+  const [validationError, setValidationError] = useState('');
 
 
   const stateOptions = [
@@ -100,13 +103,15 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
         name: `Test Run-${dateStr}`,
         description: '',
         testCaseIds: preselectedTestCaseId ? [preselectedTestCaseId] : [],
-        configurations: [] as Configuration[],
+        manualConfigurations: [] as Configuration[],
+        automatedConfigurations: [] as Configuration[],
         testPlanId: '',
         assignedTo: '',
         state: 1
       });
       setTestCaseSearch('');
       setShowTestCaseSelector(false);
+      setValidationError('');
     }
   }, [isOpen, preselectedTestCaseId]);
 
@@ -170,10 +175,19 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Handle new configurations creation first
+    setValidationError('');
+
+    const hasNonAutomatedTestCases = selectedTestCases.some(tc => tc.automationStatus !== 2);
+    const hasManualConfigs = formData.manualConfigurations.length > 0;
+
+    if (hasNonAutomatedTestCases && !hasManualConfigs) {
+      setValidationError('You have selected non-automated test cases but no manual configuration. Please add at least one manual configuration.');
+      return;
+    }
+
+    const allConfigs = [...(formData.manualConfigurations || []), ...(formData.automatedConfigurations || [])];
     const processedConfigurations = [];
-    for (const config of formData.configurations || []) {
+    for (const config of allConfigs) {
       if (config && config.id && typeof config.id === 'string' && config.id.startsWith('temp-')) {
         try {
           const newConfig = await handleCreateConfiguration(config.label);
@@ -187,7 +201,7 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
         processedConfigurations.push(config);
       }
     }
-    
+
     const submitData = {
       name: formData.name,
       description: formData.description,
@@ -351,20 +365,39 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Column */}
           <div className="space-y-6">
-            {/* Configurations */}
+            {/* Manual Configurations */}
             <div>
               <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
-                Configurations
+                Manual Configurations
               </label>
               <ConfigurationSelector
-                selectedConfigurations={formData.configurations}
-                onConfigurationsChange={(selectedConfigurations) =>
-                  setFormData(prev => ({ ...prev, configurations: selectedConfigurations }))
+                selectedConfigurations={formData.manualConfigurations}
+                onConfigurationsChange={(configs) =>
+                  setFormData(prev => ({ ...prev, manualConfigurations: configs }))
                 }
                 onCreateConfiguration={handleCreateConfiguration}
                 disabled={isSubmitting}
-                placeholder="Search or select configurations..."
+                placeholder="Select manual configurations..."
                 preloadConfigurations={isOpen}
+                filterMode="manual"
+              />
+            </div>
+
+            {/* Automated Configurations */}
+            <div>
+              <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
+                Automated Configurations
+              </label>
+              <ConfigurationSelector
+                selectedConfigurations={formData.automatedConfigurations}
+                onConfigurationsChange={(configs) =>
+                  setFormData(prev => ({ ...prev, automatedConfigurations: configs }))
+                }
+                disabled={isSubmitting}
+                placeholder="Select automated configurations..."
+                preloadConfigurations={isOpen}
+                filterMode="automated"
+                projectId={selectedProject?.id}
               />
             </div>
 
@@ -468,17 +501,23 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
           </div>
         </div>
 
+        {validationError && (
+          <div className="px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-500 dark:text-red-400">
+            {validationError}
+          </div>
+        )}
+
         {/* Footer */}
         <div className="flex justify-end space-x-3 pt-6 border-t border-slate-700">
-          <Button 
-            variant="secondary" 
+          <Button
+            variant="secondary"
             onClick={onClose}
             disabled={isSubmitting}
           >
             Cancel
           </Button>
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             disabled={isSubmitting}
             className="flex items-center"
           >

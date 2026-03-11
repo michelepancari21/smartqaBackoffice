@@ -1,13 +1,24 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
+import ActiveExecutionsIndicator from '../TestRun/ActiveExecutionsIndicator';
 import { useApp } from '../../context/AppContext';
+import { useNotifications } from '../../context/NotificationsContext';
 
 const Layout: React.FC = () => {
   const location = useLocation();
   const { getSelectedProject } = useApp();
+  const { startPolling, stopPolling } = useNotifications();
   const selectedProject = getSelectedProject();
+
+  useEffect(() => {
+    startPolling();
+
+    return () => {
+      stopPolling();
+    };
+  }, [startPolling, stopPolling]);
   
   const getPageTitle = (pathname: string) => {
     const titles: Record<string, string> = {
@@ -18,6 +29,7 @@ const Layout: React.FC = () => {
       '/test-runs': 'Test Runs',
       '/test-plans': 'Test Plans',
       '/reports': 'Reports & Analytics',
+      '/automated-configuration': 'Automated Configuration',
       '/settings': 'Settings'
     };
     return titles[pathname] || 'SMARTQA';
@@ -32,6 +44,7 @@ const Layout: React.FC = () => {
           <Outlet key={selectedProject?.id || 'no-project'} />
         </main>
       </div>
+      <ActiveExecutionsIndicator />
     </div>
   );
 };

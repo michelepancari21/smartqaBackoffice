@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Loader } from 'lucide-react';
 import Button from '../UI/Button';
 import IconSelect from '../UI/IconSelect';
@@ -14,6 +14,7 @@ interface UpdateTestCaseSidebarProps {
     testCaseType: number;
     automationStatus: number;
   };
+  originalAutomationStatus?: number;
   onInputChange: (field: string, value: string | number | Date | string[]) => void;
   users: Array<{ id: string; name: string }>;
   usersLoading: boolean;
@@ -29,6 +30,7 @@ interface UpdateTestCaseSidebarProps {
 
 const UpdateTestCaseSidebar: React.FC<UpdateTestCaseSidebarProps> = ({
   formData,
+  originalAutomationStatus,
   onInputChange,
   users,
   usersLoading,
@@ -42,6 +44,16 @@ const UpdateTestCaseSidebar: React.FC<UpdateTestCaseSidebarProps> = ({
   onSubmit
 }) => {
   const isFormDisabled = isSubmitting || isLoadingData;
+  const [automationError, setAutomationError] = useState('');
+
+  const handleAutomationStatusChange = (newValue: number) => {
+    if (originalAutomationStatus === 2 && newValue !== 2) {
+      setAutomationError('An automated test case cannot be changed to manual.');
+      return;
+    }
+    setAutomationError('');
+    onInputChange('automationStatus', newValue);
+  };
   return (
     <div className="w-80 border-l border-slate-300 dark:border-slate-700 pl-6 flex flex-col">
       <div className="flex-1 overflow-y-auto">
@@ -129,14 +141,17 @@ const UpdateTestCaseSidebar: React.FC<UpdateTestCaseSidebarProps> = ({
             </label>
             <select
               value={formData.automationStatus}
-              onChange={(e) => onInputChange('automationStatus', parseInt(e.target.value))}
-              className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400 text-sm max-w-full"
+              onChange={(e) => handleAutomationStatusChange(parseInt(e.target.value))}
+              className={`w-full px-3 py-2 bg-white dark:bg-slate-700 border rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400 text-sm max-w-full ${automationError ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
               disabled={isFormDisabled}
             >
               {Object.entries(AUTOMATION_STATUS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+            {automationError && (
+              <p className="mt-1 text-xs text-red-500 dark:text-red-400">{automationError}</p>
+            )}
           </div>
 
           {/* Tags */}

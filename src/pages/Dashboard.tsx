@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Activity,
-  CheckCircle,
   Loader,
   TestTube,
   Database,
@@ -18,21 +17,23 @@ import { useTestRunsData } from '../hooks/useTestRunsData';
 import { useRestoreLastProject } from '../hooks/useRestoreLastProject';
 import { TEST_CASE_TYPES } from '../types';
 
+export type AutomationFilter = 'all' | 'automated' | 'not-automated';
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { getSelectedProject, state } = useApp();
   const { theme } = useTheme();
   const selectedProject = getSelectedProject();
+  const [automationFilter, setAutomationFilter] = useState<AutomationFilter>('all');
 
   useRestoreLastProject();
 
   const tickColor = theme === 'dark' ? '#94a3b8' : '#475569';
 
-  const { summaryData, loading: summaryLoading } = useDashboardSummary(selectedProject, state.projects);
-  const { data: testRunsData, loading: testRunsLoading } = useTestRunsData(selectedProject?.id);
+  const { summaryData, loading: summaryLoading } = useDashboardSummary(selectedProject, state.projects, automationFilter);
+  const { data: testRunsData, loading: testRunsLoading } = useTestRunsData(selectedProject?.id, automationFilter);
 
   const activeTestRunsChartData = testRunsData?.activeTestRunsChart;
-  const closedTestRunsChartData = testRunsData?.closedTestRunsChart;
   const closedTestRunsResultsData = testRunsData?.closedTestRunsRawData;
 
   const getTypeColor = (typeId: number): string => {
@@ -139,191 +140,22 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
       </div>
 
       {selectedProject && (
         <div className="bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border border-cyan-500/30 rounded-lg p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <Database className="w-5 h-5 mr-2 text-green-400" />
             <div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center">
-                <Database className="w-5 h-5 mr-2 text-green-400" />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                 📁 {selectedProject.name}
               </h3>
               <p className="text-sm text-slate-600 dark:text-gray-400">{selectedProject.description}</p>
             </div>
-            <div className="text-right">
-              <div className="text-sm text-slate-600 dark:text-gray-400">Total Test Cases</div>
-              <div className="text-2xl font-bold text-cyan-400">
-                {summaryLoading ? <Loader className="w-6 h-6 animate-spin inline" /> : summaryData?.totalTestCases || 0}
-              </div>
-            </div>
           </div>
         </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {testRunsLoading ? (
-          <SkeletonCard />
-        ) : (
-          <Card gradient className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Test Cases in Active Test Runs</h3>
-            </div>
-
-            <div className="h-64 flex items-center justify-center relative">
-              {totalActiveTestCases > 0 ? (
-              <div className="h-full w-full flex items-center">
-                <ResponsiveContainer width="60%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={activeTestRunsData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={90}
-                      dataKey="value"
-                      startAngle={90}
-                      endAngle={450}
-                      onClick={handleActiveTestRunsClick}
-                    >
-                      {activeTestRunsData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={entry.color}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'rgb(241 245 249)', border: '1px solid rgb(203 213 225)',
-                        borderRadius: '8px',
-                        color: 'rgb(15 23 42)'
-                      }}
-                      labelStyle={{ color: 'rgb(15 23 42)' }}
-                      itemStyle={{ color: 'rgb(15 23 42)' }}
-                    />
-                    <text
-                      x="50%"
-                      y="45%"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      className="fill-slate-900 dark:fill-white text-2xl font-bold"
-                    >
-                      {totalActiveTestCases}
-                    </text>
-                    <text
-                      x="50%"
-                      y="55%"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      className="fill-slate-600 dark:fill-gray-400 text-sm"
-                    >
-                      Total Test Cases
-                    </text>
-                  </PieChart>
-                </ResponsiveContainer>
-
-                <div className="ml-6 space-y-3 flex-1">
-                  {activeTestRunsData.filter(entry => entry.value > 0).map((entry, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div className="w-3 h-3 rounded-full mr-3" style={{ backgroundColor: entry.color }}></div>
-                        <span className="text-sm text-slate-700 dark:text-gray-300">{entry.name}</span>
-                      </div>
-                      <span className="text-sm text-slate-700 dark:text-gray-300">
-                        {entry.value} ({activeTestRunsPercentages[activeTestRunsData.indexOf(entry)]}%)
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center text-slate-500 dark:text-gray-400">
-                <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">No active test runs</p>
-                <p className="text-sm">Start executing tests to see the distribution</p>
-              </div>
-              )}
-            </div>
-          </Card>
-        )}
-
-        {testRunsLoading ? (
-          <SkeletonCard />
-        ) : (
-          <Card gradient className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Closed Test Runs</h3>
-            </div>
-
-            <div className="h-64 flex items-center justify-center relative">
-              {closedTestRunsChartData && closedTestRunsChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={closedTestRunsChartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-slate-300 dark:stroke-slate-700" />
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fill: tickColor }}
-                    fontSize={12}
-                  />
-                  <YAxis
-                    tick={{ fill: tickColor }}
-                    fontSize={12}
-                   allowDecimals={false}
-                    domain={[0, 'dataMax']}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgb(241 245 249)', border: '1px solid rgb(203 213 225)',
-                      borderRadius: '8px',
-                      color: 'rgb(15 23 42)'
-                    }}
-                    formatter={(value) => [`${value} test run${value !== 1 ? 's' : ''}`, 'Closed']}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#06B6D4"
-                    strokeWidth={3}
-                    dot={{ fill: '#06B6D4', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, fill: '#06B6D4' }}
-                    connectNulls={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="text-center text-slate-500 dark:text-gray-400">
-                <CheckCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">No closed test runs</p>
-                <p className="text-sm">Complete test runs to see historical data</p>
-              </div>
-              )}
-            </div>
-          </Card>
-        )}
-      </div>
-
-      {testRunsLoading ? (
-        <SkeletonCard height="h-80" />
-      ) : (
-        <Card gradient className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Results from Closed Test Runs</h3>
-          </div>
-
-          <div className="h-80 flex items-center justify-center relative">
-            <div className="w-full h-full">
-              <ClosedRunsCaseResultsStackedChart
-                projectId={selectedProject?.id}
-                closedTestRunsData={closedTestRunsResultsData}
-                className="h-80"
-              />
-            </div>
-          </div>
-        </Card>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -350,6 +182,113 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
+
+      {testRunsLoading ? (
+        <SkeletonCard />
+      ) : (
+        <Card gradient className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Test Cases in Active Test Runs</h3>
+          </div>
+
+          <div className="h-64 flex items-center justify-center relative">
+            {totalActiveTestCases > 0 ? (
+            <div className="h-full w-full flex items-center">
+              <ResponsiveContainer width="60%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={activeTestRunsData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    dataKey="value"
+                    startAngle={90}
+                    endAngle={450}
+                    onClick={handleActiveTestRunsClick}
+                  >
+                    {activeTestRunsData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.color}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgb(241 245 249)', border: '1px solid rgb(203 213 225)',
+                      borderRadius: '8px',
+                      color: 'rgb(15 23 42)'
+                    }}
+                    labelStyle={{ color: 'rgb(15 23 42)' }}
+                    itemStyle={{ color: 'rgb(15 23 42)' }}
+                  />
+                  <text
+                    x="50%"
+                    y="45%"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    className="fill-slate-900 dark:fill-white text-2xl font-bold"
+                  >
+                    {totalActiveTestCases}
+                  </text>
+                  <text
+                    x="50%"
+                    y="55%"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    className="fill-slate-600 dark:fill-gray-400 text-sm"
+                  >
+                    Total Test Cases
+                  </text>
+                </PieChart>
+              </ResponsiveContainer>
+
+              <div className="ml-6 space-y-3 flex-1">
+                {activeTestRunsData.filter(entry => entry.value > 0).map((entry, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 rounded-full mr-3" style={{ backgroundColor: entry.color }}></div>
+                      <span className="text-sm text-slate-700 dark:text-gray-300">{entry.name}</span>
+                    </div>
+                    <span className="text-sm text-slate-700 dark:text-gray-300">
+                      {entry.value} ({activeTestRunsPercentages[activeTestRunsData.indexOf(entry)]}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center text-slate-500 dark:text-gray-400">
+              <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">No active test runs</p>
+              <p className="text-sm">Start executing tests to see the distribution</p>
+            </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {testRunsLoading ? (
+        <SkeletonCard height="h-80" />
+      ) : (
+        <Card gradient className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Results from Closed Test Runs</h3>
+          </div>
+
+          <div className="h-80 flex items-center justify-center relative">
+            <div className="w-full h-full">
+              <ClosedRunsCaseResultsStackedChart
+                projectId={selectedProject?.id}
+                closedTestRunsData={closedTestRunsResultsData}
+                className="h-80"
+              />
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {summaryLoading ? (

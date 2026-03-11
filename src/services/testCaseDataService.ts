@@ -280,6 +280,7 @@ class TestCaseDataService {
         });
       }
 
+      // Process shared steps using the metadata from the separate endpoint
       // Fetch full details for each shared step
       const sharedStepsPromises = sharedStepRefs.map(async (sharedStepRef: { id: string; meta: { order: number; pivot_id: number } }) => {
         const sharedStepId = sharedStepRef.id.split('/').pop() || sharedStepRef.id;
