@@ -1,3 +1,9 @@
+## [1.8.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.7.0...1.8.0) (2026-03-11)
+
+### Features
+
+* add all automated tests executions features ([5268df9](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/5268df9c5fe1f2320d77746045102450ed88a3e3))
+
 ## [1.5.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.4.0...1.5.0) (2026-03-05)
 
 ### Features
