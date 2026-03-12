@@ -1,3 +1,9 @@
+## [1.9.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.8.0...1.9.0) (2026-03-12)
+
+### Features
+
+* **TestCaseDetailsSidebar:** enhance execution handling by allowing execution data to be passed directly from the Test Run Details page, improving performance and reducing API calls ([be0501e](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/be0501ef55bcd8e45d998ce196d65cabaad7d733))
+
 ## [1.8.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.7.0...1.8.0) (2026-03-11)
 
 ### Features
