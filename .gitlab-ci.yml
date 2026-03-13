@@ -10,13 +10,18 @@ variables:
 .only_dev: &only_dev
   only:
     refs:
-      - master
+      - branches
     variables:
-      - $CI_COMMIT_MESSAGE !~ /\[skip release\]/
+      - $CI_COMMIT_REF_NAME =~ /^develop-/
 
 .only_prod: &only_prod
   only:
     - tags
+
+.only_stag: &only_stag
+  only:
+    refs:
+      - master
 
 ####### AUTH (AWS, COMPOSER, SSH) #######
 .aws_auth: &aws_auth
@@ -69,6 +74,46 @@ deploy:development:
     - aws s3 sync "${BUILD_DIR}/" "s3://${S3_BUCKET_NAME}/" --delete
     - aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
   <<: *only_dev
+
+# Staging: AWS account 963496677041. Set CLOUDFRONT_DISTRIBUTION_ID in GitLab CI/CD variables if not set here.
+build:staging:
+  image: node:20-alpine
+  stage: build
+  script:
+    - npm install
+    - npm run build-$STAGE
+  artifacts:
+    paths:
+      - ${BUILD_DIR}/
+    expire_in: 1 hour
+  variables:
+    STAGE: stag
+    AWS_DEFAULT_REGION: eu-west-1
+    ROLE_ARN: arn:aws:iam::963496677041:role/dvf-smartqa-stag-role-sls-deployment
+    S3_BUCKET_NAME: "smartqa-stag-backoffice-s3"
+    CLOUDFRONT_DISTRIBUTION_ID: "E25NWH15U8C9I7"
+  cache:
+    paths:
+      - node_modules/
+  <<: *only_stag
+
+deploy:staging:
+  image:
+    name: amazon/aws-cli:latest
+    entrypoint: [""]
+  stage: deploy
+  variables:
+    STAGE: stag
+    AWS_DEFAULT_REGION: eu-west-1
+    ROLE_ARN: arn:aws:iam::963496677041:role/dvf-smartqa-stag-role-sls-deployment
+    S3_BUCKET_NAME: "smartqa-stag-backoffice-s3"
+    CLOUDFRONT_DISTRIBUTION_ID: "E25NWH15U8C9I7"
+  before_script:
+    - *aws_auth
+  script:
+    - aws s3 sync "${BUILD_DIR}/" "s3://${S3_BUCKET_NAME}/" --delete
+    - aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
+  <<: *only_stag
 
 build:production:
   image: node:20-alpine
