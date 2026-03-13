@@ -7,6 +7,7 @@
     "dev": "vite --mode dev",
     "build": "vite build --mode dev",
     "build-dev": "vite build --mode dev",
+    "build-stag": "vite build --mode stag",
     "build-prod": "vite build --mode prod",
     "lint": "eslint .",
     "preview": "vite preview --mode dev"
