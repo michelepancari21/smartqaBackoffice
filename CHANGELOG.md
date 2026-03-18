@@ -1,3 +1,10 @@
+## [1.10.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.9.0...1.10.0) (2026-03-18)
+
+### Features
+
+* first prod automation feedbacks ([e97dd41](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/e97dd41b8c86ccbb16d873821609277537faab63))
+* first prod automation feedbacks ([910fdf5](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/910fdf5c668c0296b8c104643ddc59ad39b3d5b0))
+
 ## [1.9.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.8.0...1.9.0) (2026-03-12)
 
 ### Features
