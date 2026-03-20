@@ -1,3 +1,9 @@
+## [1.12.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.11.0...1.12.0) (2026-03-20)
+
+### Features
+
+* **UpdateTestCaseSteps:** simplify shared step handling by utilizing helper... ([46be261](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/46be2615c99e89c723e7d420650601ec3c0f7f78))
+
 ## [1.10.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.9.0...1.10.0) (2026-03-18)
 
 ### Features
