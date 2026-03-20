@@ -18,6 +18,7 @@ import Button from '../UI/Button';
 import DraggableTestStepWithAutoUpload from './DraggableTestStepWithAutoUpload';
 import DraggableSharedStep from './DraggableSharedStep';
 import { ProcessedSharedStep } from '../../services/testCaseDataService';
+import { findSharedStepByCompositeOrderId, isSharedStepSuffixPivotOrOrder, parseSharedCompositeOrderId } from '../../utils/updateTestCaseHelpers';
 
 interface TestStep {
   id: string;
@@ -75,30 +76,9 @@ const UpdateTestCaseSteps: React.FC<UpdateTestCaseStepsProps> = ({
       if (orderItem.type === 'step') {
         const step = testSteps.find(s => s.id === orderItem.id);
         return step ? { type: 'step' as const, id: step.id, step: step.step, result: step.result, originalId: step.originalId } : null;
-      } else {
-        // Handle both new instance IDs (shared-{id}-{timestamp}) and existing pivot IDs (shared-{id}-{pivotId})
-        const idParts = orderItem.id.split('-');
-        if (idParts.length >= 3 && idParts[0] === 'shared') {
-          const sharedStepId = idParts[1];
-          const thirdPart = idParts[2];
-
-          // Check if it's a pivot ID (from existing data) or timestamp (from new instances)
-          const isPivotId = !isNaN(parseInt(thirdPart)) && parseInt(thirdPart) < 1000000000000; // Pivot IDs are smaller than timestamps
-
-          if (isPivotId) {
-            // Existing shared step with pivot ID
-            const pivotId = parseInt(thirdPart);
-            const sharedStep = sharedSteps.find(s => s.id === sharedStepId && s.pivotId === pivotId);
-            return sharedStep ? { type: 'shared' as const, id: orderItem.id, sharedStep } : null;
-          } else {
-            // New shared step instance with timestamp
-            // Find by instanceId (the full unique ID) to support duplicate shared steps
-            const sharedStep = sharedSteps.find(s => s.instanceId === orderItem.id);
-            return sharedStep ? { type: 'shared' as const, id: orderItem.id, sharedStep } : null;
-          }
-        }
-        return null;
       }
+      const sharedStep = findSharedStepByCompositeOrderId(sharedSteps, orderItem.id);
+      return sharedStep ? { type: 'shared' as const, id: orderItem.id, sharedStep } : null;
     }).filter(Boolean) as TestStepOrSharedStepInstance[];
   }, [stepOrder, testSteps, sharedSteps]);
 
@@ -169,22 +149,18 @@ const UpdateTestCaseSteps: React.FC<UpdateTestCaseStepsProps> = ({
                       uniqueId={item.id}
                       index={index}
                       onRemove={() => {
-                        // Extract pivot ID or use instance ID based on type
-                        const idParts = item.id.split('-');
-                        if (idParts.length >= 3 && idParts[0] === 'shared') {
-                          const thirdPart = idParts[2];
-                          const isPivotId = !isNaN(parseInt(thirdPart)) && parseInt(thirdPart) < 1000000000000;
-
-                          if (isPivotId) {
-                            // Existing shared step with pivot ID
-                            const pivotId = parseInt(thirdPart);
-                            onRemoveSharedStep(`pivot-${pivotId}`);
-                          } else {
-                            // New shared step instance - use full unique ID
-                            onRemoveSharedStep(item.id);
-                          }
+                        const parsed = parseSharedCompositeOrderId(item.id);
+                        if (!parsed) {
+                          onRemoveSharedStep(item.id);
+                          return;
+                        }
+                        if (isSharedStepSuffixPivotOrOrder(parsed.suffix)) {
+                          const pivotId =
+                            item.sharedStep!.pivotId != null && item.sharedStep!.pivotId !== undefined
+                              ? Number(item.sharedStep!.pivotId)
+                              : parseInt(parsed.suffix, 10);
+                          onRemoveSharedStep(`pivot-${pivotId}`);
                         } else {
-                          // Fallback
                           onRemoveSharedStep(item.id);
                         }
                       }}

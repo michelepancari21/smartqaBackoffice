@@ -1,5 +1,47 @@
 // Helper functions for UpdateTestCaseModal
 
+/** step order ids: `shared-{sharedStepId}-{pivotId|order|timestamp}` — sharedStepId may contain hyphens */
+const SHARED_ORDER_PREFIX = 'shared-';
+
+/** Date.now() is ~1.7e12; pivot / order values stay below this */
+const SHARED_SUFFIX_TIMESTAMP_THRESHOLD = 1_000_000_000_000;
+
+export function parseSharedCompositeOrderId(orderId: string): { sharedStepId: string; suffix: string } | null {
+  if (!orderId.startsWith(SHARED_ORDER_PREFIX)) return null;
+  const rest = orderId.slice(SHARED_ORDER_PREFIX.length);
+  const lastDash = rest.lastIndexOf('-');
+  if (lastDash < 0) return null;
+  return {
+    sharedStepId: rest.slice(0, lastDash),
+    suffix: rest.slice(lastDash + 1)
+  };
+}
+
+export function isSharedStepSuffixPivotOrOrder(suffix: string): boolean {
+  const n = parseInt(suffix, 10);
+  return !Number.isNaN(n) && n < SHARED_SUFFIX_TIMESTAMP_THRESHOLD;
+}
+
+export function findSharedStepByCompositeOrderId<
+  T extends { id: string | number; pivotId?: number | null; order?: number; instanceId?: string }
+>(sharedSteps: T[], orderItemId: string): T | undefined {
+  const parsed = parseSharedCompositeOrderId(orderItemId);
+  if (!parsed) return undefined;
+  const { sharedStepId, suffix } = parsed;
+
+  if (isSharedStepSuffixPivotOrOrder(suffix)) {
+    const suffixNum = parseInt(suffix, 10);
+    return sharedSteps.find(s => {
+      if (String(s.id) !== String(sharedStepId)) return false;
+      if (s.pivotId != null && s.pivotId !== undefined) {
+        return Number(s.pivotId) === suffixNum;
+      }
+      return Number(s.order) === suffixNum;
+    });
+  }
+  return sharedSteps.find(s => s.instanceId === orderItemId);
+}
+
 export const getStateNumber = (status: string): number => {
   const stateMap = {
     'active': 1,
@@ -92,41 +134,15 @@ export const buildSharedStepsRelationships = (
     const order = position + 1;
 
     if (orderItem.type === 'shared') {
-      // Handle both new instance IDs (shared-{id}-{timestamp}) and existing pivot IDs (shared-{id}-{pivotId})
-      const idParts = orderItem.id.split('-');
-      if (idParts.length >= 3 && idParts[0] === 'shared') {
-        const sharedStepId = idParts[1];
-        const thirdPart = idParts[2];
-
-        // Check if it's a pivot ID (from existing data) or timestamp (from new instances)
-        const isPivotId = !isNaN(parseInt(thirdPart)) && parseInt(thirdPart) < 1000000000000; // Pivot IDs are smaller than timestamps
-
-        if (isPivotId) {
-          // Existing shared step with pivot ID - find by both ID and pivot ID
-          const pivotId = parseInt(thirdPart);
-          const sharedStep = sharedSteps.find(s => s.id === sharedStepId && s.pivotId === pivotId);
-          if (sharedStep) {
-            sharedStepsRelationships.push({
-              type: "SharedStep",
-              id: `/api/shared_steps/${sharedStep.id}`,
-              meta: {
-                order: order
-              }
-            });
+      const sharedStep = findSharedStepByCompositeOrderId(sharedSteps, orderItem.id);
+      if (sharedStep) {
+        sharedStepsRelationships.push({
+          type: "SharedStep",
+          id: `/api/shared_steps/${sharedStep.id}`,
+          meta: {
+            order: order
           }
-        } else {
-          // New shared step instance with timestamp - find by instanceId for uniqueness
-          const sharedStep = sharedSteps.find(s => s.instanceId === orderItem.id);
-          if (sharedStep) {
-            sharedStepsRelationships.push({
-              type: "SharedStep",
-              id: `/api/shared_steps/${sharedStep.id}`,
-              meta: {
-                order: order
-              }
-            });
-          }
-        }
+        });
       }
     }
   }
