@@ -1,3 +1,9 @@
+## [1.13.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.12.0...1.13.0) (2026-03-23)
+
+### Features
+
+* **SharedStepViewModal:** improve date formatting and simplify folder... ([2964986](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/29649865c571ebdf881282083ba622b3e4d32668))
+
 ## [1.12.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.11.0...1.12.0) (2026-03-20)
 
 ### Features
