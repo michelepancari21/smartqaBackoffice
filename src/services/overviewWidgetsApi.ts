@@ -1,0 +1,255 @@
+import { apiService } from './api';
+
+export interface OverviewWidgetsWindow {
+  from: string;
+  to: string;
+  /** Always 7 for the previous Monday–Sunday window. */
+  days: number;
+  preset: 'previous_calendar_week' | string;
+}
+
+export interface OverviewWeeklyTotals {
+  pass: number;
+  fail: number;
+  passRate: number | null;
+}
+
+export interface OverviewDefectMixItem {
+  tag: string;
+  label: string;
+  failCount: number;
+  percent: number | null;
+}
+
+export interface OverviewExecutionRow {
+  key: string;
+  label: string;
+  pass: number;
+  fail: number;
+  passRate: number | null;
+  band: 'passed' | 'failed' | string;
+}
+
+export interface OverviewDefectSeriesRow {
+  date: string;
+  label: string;
+  [tagKey: string]: string | number;
+}
+
+export interface OverviewDefectSeriesProject {
+  projectId: number;
+  label: string;
+  series: OverviewDefectSeriesRow[];
+}
+
+export interface OverviewWidgetsResponse {
+  window: OverviewWidgetsWindow;
+  weeklyTotals: OverviewWeeklyTotals;
+  defectMix: OverviewDefectMixItem[];
+  executionByService: OverviewExecutionRow[];
+  executionByCountry: OverviewExecutionRow[];
+  /** Same `key` as `executionByService[].key` → rows grouped by `projects.country` for that suite. */
+  executionByCountryByService: Record<string, OverviewExecutionRow[]>;
+  defectSeriesByProject: OverviewDefectSeriesProject[];
+}
+
+/**
+ * Fetches overview widget aggregates (SmartQA API).
+ * Weekly pass/fail totals come from test case executions; defect mix from Robot XML mirror (overview_*).
+ * `defectSeriesByProject` is one row per service (test suite) with server-generated placeholder stacked counts.
+ */
+export async function fetchOverviewWidgets(): Promise<OverviewWidgetsResponse> {
+  return apiService.authenticatedRequest('/widgets/overview', {
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+  }) as Promise<OverviewWidgetsResponse>;
+}
+
+/** One Overview Launches tab row (joins test_run_executions with overview_* XML mirror). */
+export interface OverviewLaunchApiRow {
+  testRunExecutionId: number;
+  displayName: string;
+  /** Root suite row `overview_suites.name` (MIN suite_id where parent is null) for this robot. */
+  rootOverviewSuiteName: string | null;
+  durationLabel: string;
+  /** Launch creator: `roles.slug` when set, else user login / email (API). */
+  ownerLabel: string;
+  attributeLine: string;
+  /** Default Start time column: relative phrase from `overview_statuses.start` (e.g. "5 minutes ago"). */
+  startTimeRelative: string;
+  /** Absolute time in app timezone (Y-m-d H:i:s), shown on cell hover. */
+  startTimeDisplay: string;
+  /** Trimmed DB value of `overview_statuses.start`; preferred for hover when set. */
+  startTimeRaw: string | null;
+  total: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  productBug: number;
+  autoBug: number;
+  systemIssue: number;
+  toInvestigate: number;
+}
+
+export interface OverviewLaunchesMeta {
+  currentPage: number;
+  lastPage: number;
+  perPage: number;
+  total: number;
+}
+
+export interface OverviewLaunchesResponse {
+  launches: OverviewLaunchApiRow[];
+  meta: OverviewLaunchesMeta;
+}
+
+/** Column ids for GET /widgets/overview/launches sorting (server-side). */
+export type OverviewLaunchesSortColumn =
+  | 'tre_id'
+  | 'name'
+  | 'start_time'
+  | 'duration'
+  | 'total'
+  | 'passed'
+  | 'failed'
+  | 'skipped'
+  | 'product_bug'
+  | 'auto_bug'
+  | 'system_issue'
+  | 'to_investigate';
+
+export interface FetchOverviewLaunchesParams {
+  page?: number;
+  perPage?: number;
+  sort?: OverviewLaunchesSortColumn;
+  direction?: 'asc' | 'desc';
+}
+
+/**
+ * Fetches execution rows for the Overview Launches tab (Robot XML mirror joined to executions).
+ */
+export async function fetchOverviewLaunches(
+  params: FetchOverviewLaunchesParams = {},
+): Promise<OverviewLaunchesResponse> {
+  const search = new URLSearchParams();
+  if (params.page != null) {
+    search.set('page', String(params.page));
+  }
+  if (params.perPage != null) {
+    search.set('per_page', String(params.perPage));
+  }
+  if (params.sort != null && params.sort !== '') {
+    search.set('sort', params.sort);
+  }
+  if (params.direction != null) {
+    search.set('direction', params.direction);
+  }
+  const qs = search.toString();
+  const path = qs ? `/widgets/overview/launches?${qs}` : '/widgets/overview/launches';
+
+  return apiService.authenticatedRequest(path, {
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+  }) as Promise<OverviewLaunchesResponse>;
+}
+
+/** One row in the suite list view (`overview_tests` + suite-level `overview_kws`). */
+export interface OverviewLaunchSuiteItemApiRow {
+  methodType: string;
+  name: string;
+  durationLabel: string;
+  statusLabel: string;
+  startTimeRelative: string;
+  startTimeDisplay: string;
+  startTimeRaw: string | null;
+  defectType: string | null;
+  /** `overview_tests.test_id` when this row is a test; otherwise null. */
+  overviewTestId: number | null;
+  /** Suite-level `overview_kws.kw_id` when this row is a suite keyword; otherwise null. */
+  overviewSuiteKwId: number | null;
+  /** Path from `Suites/` onward from `overview_suites.source`; null if not present. */
+  suiteSourceRelative: string | null;
+  /** `overview_tests.line` for test rows; always null for suite-keyword rows. */
+  overviewTestLine: number | null;
+}
+
+export interface OverviewLaunchSuiteItemsResponse {
+  items: OverviewLaunchSuiteItemApiRow[];
+}
+
+/**
+ * Fetches direct child tests and suite keywords under the root suite for a launch (XML mirror).
+ */
+export async function fetchOverviewLaunchSuiteItems(
+  testRunExecutionId: number,
+): Promise<OverviewLaunchSuiteItemsResponse> {
+  return apiService.authenticatedRequest(
+    `/widgets/overview/launches/${testRunExecutionId}/suite-items`,
+    {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+    },
+  ) as Promise<OverviewLaunchSuiteItemsResponse>;
+}
+
+/** One log line under an overview test (top-level keywords). */
+export interface OverviewTestLogItemApiRow {
+  logMessage: string;
+  statusLabel: string;
+  durationLabel: string;
+  startTimeRelative: string;
+  startTimeDisplay: string;
+  startTimeRaw: string | null;
+}
+
+export interface OverviewTestLogItemsResponse {
+  testName: string;
+  testStatusLabel: string;
+  /** Path from `Suites/` onward from `overview_suites.source`; null if missing. */
+  suiteSourceRelative: string | null;
+  /** `overview_tests.line` for test logs; null for suite-keyword logs. */
+  testLine: number | null;
+  items: OverviewTestLogItemApiRow[];
+}
+
+/**
+ * Fetches log-style rows (SETUP / KEYWORD / TEARDOWN) for one `overview_tests` row.
+ */
+export async function fetchOverviewTestLogItems(
+  testRunExecutionId: number,
+  overviewTestId: number,
+): Promise<OverviewTestLogItemsResponse> {
+  return apiService.authenticatedRequest(
+    `/widgets/overview/launches/${testRunExecutionId}/overview-tests/${overviewTestId}/log-items`,
+    {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+    },
+  ) as Promise<OverviewTestLogItemsResponse>;
+}
+
+/**
+ * Same JSON shape as test log: direct child `overview_kws` under a top-level suite-scoped keyword.
+ */
+export async function fetchOverviewSuiteKwLogItems(
+  testRunExecutionId: number,
+  overviewSuiteKwId: number,
+): Promise<OverviewTestLogItemsResponse> {
+  return apiService.authenticatedRequest(
+    `/widgets/overview/launches/${testRunExecutionId}/overview-suite-kws/${overviewSuiteKwId}/log-items`,
+    {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+    },
+  ) as Promise<OverviewTestLogItemsResponse>;
+}
