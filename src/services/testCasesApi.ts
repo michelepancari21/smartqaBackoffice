@@ -558,7 +558,10 @@ class TestCasesApiService {
     // Add tags relationship if provided
     if (testCaseData.tags && testCaseData.tags.length > 0) {
       requestBody.data.relationships.tags = {
-        data: testCaseData.tags.map(tag => ({ type: "Tag", id: `/api/tags/${tag.id}` }))
+        data: testCaseData.tags.map(tag => {
+          const rawId = tag.id.toString().split('/').pop() || tag.id;
+          return { type: "Tag", id: `/api/tags/${rawId}` };
+        })
       };
     }
 
@@ -679,7 +682,10 @@ class TestCasesApiService {
     // Add tags relationship if provided
     // Always send tags relationship (empty array if no tags selected)
     requestBody.data.relationships.tags = {
-      data: testCaseData.tags.map(tag => ({ type: "Tag", id: `/api/tags/${tag.id}` }))
+      data: testCaseData.tags.map(tag => {
+        const rawId = tag.id.toString().split('/').pop() || tag.id;
+        return { type: "Tag", id: `/api/tags/${rawId}` };
+      })
     };
     
     // Add step_results relationship if provided

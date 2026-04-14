@@ -8,35 +8,33 @@ interface TagSelectorProps {
   onTagsChange: (tags: Tag[]) => void;
   disabled?: boolean;
   placeholder?: string;
+  allowCreate?: boolean;
 }
 
 const TagSelector: React.FC<TagSelectorProps> = ({
   selectedTags,
   onTagsChange,
   disabled = false,
-  placeholder = 'Search or create tags...'
+  placeholder,
+  allowCreate = true
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [fetchedTags, setFetchedTags] = useState<Tag[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const hasFetched = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (hasFetched.current) return;
-    hasFetched.current = true;
+  const fetchTags = () => {
     setIsLoading(true);
-    tagsApiService.getTags().then((response) => {
-      setFetchedTags(response.data.map(t => tagsApiService.transformApiTag(t)));
+    tagsApiService.getTags().then((tags) => {
+      setFetchedTags(tags);
     }).catch((err) => {
       console.error('Failed to fetch tags:', err);
-      hasFetched.current = false;
     }).finally(() => {
       setIsLoading(false);
     });
-  }, []);
+  };
 
   const allTags = fetchedTags;
 
@@ -46,8 +44,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
     !selectedTags.some(selected => selected.id === tag.id || selected.label.toLowerCase() === tag.label.toLowerCase())
   );
 
-  // Check if search term would create a new tag
-  const canCreateNew = searchTerm.trim() && 
+  const canCreateNew = allowCreate && searchTerm.trim() &&
     !allTags.some(tag => tag.label.toLowerCase() === searchTerm.toLowerCase()) &&
     !selectedTags.some(tag => tag.label.toLowerCase() === searchTerm.toLowerCase());
 
@@ -128,9 +125,9 @@ const TagSelector: React.FC<TagSelectorProps> = ({
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => { setIsOpen(true); fetchTags(); }}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={placeholder || (allowCreate ? 'Search or create tags...' : 'Search tags...')}
           disabled={disabled}
           className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
         />

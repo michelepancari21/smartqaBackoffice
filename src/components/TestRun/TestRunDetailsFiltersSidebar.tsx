@@ -140,8 +140,7 @@ const TestRunDetailsFiltersSidebar: React.FC<TestRunDetailsFiltersSidebarProps> 
                 availableTags={availableTags}
                 selectedTags={filters.tags}
                 onTagsChange={(selectedTags) => onFilterChange('tags', selectedTags)}
-                onCreateTag={onCreateTag}
-                placeholder="Search or create tags..."
+                allowCreate={false}
               />
             </div>
 

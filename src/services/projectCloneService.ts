@@ -317,8 +317,7 @@ export class ProjectCloneService {
     sharedStepMapping: SharedStepMapping[],
     testCaseMapping: TestCaseMapping[]
   ): Promise<void> {
-    const allTagsResponse = await tagsApiService.getTags();
-    const allTags = allTagsResponse.data.map(apiTag => tagsApiService.transformApiTag(apiTag));
+    const allTags = await tagsApiService.getTags();
 
     const priorityMap: { [key: string]: number } = {
       low: 4,

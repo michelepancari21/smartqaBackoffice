@@ -243,11 +243,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       dispatch({ type: 'SET_LOADING_TAGS', payload: true });
       
-      const response = await tagsApiService.getTags();
-      const transformedTags = response.data.map(apiTag => 
-        tagsApiService.transformApiTag(apiTag)
-      );
-      
+      const transformedTags = await tagsApiService.getTags();
+
       dispatch({ type: 'SET_TAGS', payload: transformedTags });
       
     } catch (error) {
