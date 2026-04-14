@@ -11,12 +11,9 @@ export const useTags = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const response = await tagsApiService.getTags();
-      const transformedTags = response.data.map(apiTag => 
-        tagsApiService.transformApiTag(apiTag)
-      );
-      
+
+      const transformedTags = await tagsApiService.getTags();
+
       setTags(transformedTags);
       
     } catch (err) {

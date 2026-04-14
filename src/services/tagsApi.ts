@@ -1,30 +1,16 @@
 import { apiService } from './api';
 
-export interface ApiTag {
-  id: string;
-  type: string;
-  attributes: {
-    id: number;
-    label: string;
-    createdAt: string;
-    updatedAt: string;
-  };
+export interface ApiTagListItem {
+  id: number;
+  label: string;
+  iri: string;
 }
 
-export interface TagsApiResponse {
-  links: {
-    self: string;
-    first: string;
-    last: string;
-    next?: string;
-    prev?: string;
-  };
+export interface TagsListApiResponse {
+  data: ApiTagListItem[];
   meta: {
     totalItems: number;
-    itemsPerPage: number;
-    currentPage: number;
   };
-  data: ApiTag[];
 }
 
 export interface CreateTagRequest {
@@ -37,7 +23,7 @@ export interface CreateTagRequest {
 }
 
 export interface CreateTagResponse {
-  data: ApiTag;
+  data: ApiTagListItem;
 }
 
 export interface Tag {
@@ -46,57 +32,16 @@ export interface Tag {
 }
 
 class TagsApiService {
-  public getDefaultTagsResponse(): TagsApiResponse {
-    return {
-      links: {
-        self: '',
-        first: '',
-        last: ''
-      },
-      meta: {
-        totalItems: 0,
-        itemsPerPage: 100,
-        currentPage: 1
-      },
-      data: []
-    };
-  }
+  async getTags(): Promise<Tag[]> {
+    const response: TagsListApiResponse = await apiService.authenticatedRequest(
+      '/tags-list'
+    );
 
-  async getTags(): Promise<TagsApiResponse> {
-    let allTags: ApiTag[] = [];
-    let currentPage = 1;
-    let totalPages = 1;
+    if (response && response.data) {
+      return response.data.map(item => this.transformApiTag(item));
+    }
 
-    do {
-      const response: TagsApiResponse = await apiService.authenticatedRequest(
-        `/tags?itemsPerPage=100&page=${currentPage}`
-      );
-
-      if (response && response.data) {
-        allTags = [...allTags, ...response.data];
-
-        // Calculate total pages from meta information
-        if (response.meta) {
-          totalPages = Math.ceil(response.meta.totalItems / response.meta.itemsPerPage);
-        }
-      }
-
-      currentPage++;
-    } while (currentPage <= totalPages);
-
-    return {
-      links: {
-        self: '/tags',
-        first: '/tags?page=1',
-        last: `/tags?page=${totalPages}`
-      },
-      meta: {
-        totalItems: allTags.length,
-        itemsPerPage: 100,
-        currentPage: totalPages
-      },
-      data: allTags
-    };
+    return [];
   }
 
   async createTag(label: string): Promise<CreateTagResponse> {
@@ -121,11 +66,10 @@ class TagsApiService {
     return response;
   }
 
-  // Helper method to transform API tag to our internal format
-  transformApiTag(apiTag: ApiTag): Tag {
+  transformApiTag(apiTag: ApiTagListItem): Tag {
     return {
-      id: apiTag.attributes.id.toString(),
-      label: apiTag.attributes.label
+      id: apiTag.id.toString(),
+      label: apiTag.label
     };
   }
 }
