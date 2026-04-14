@@ -157,29 +157,66 @@ export interface OverviewLaunchesProjectOption {
   name: string;
 }
 
+/** Session cache so revisiting the Launches tab does not re-fetch every project page. */
+let overviewLaunchesProjectOptionsCache: OverviewLaunchesProjectOption[] | null = null;
+/** Single in-flight load so concurrent callers share one network round-trip set. */
+let overviewLaunchesProjectOptionsInflight: Promise<OverviewLaunchesProjectOption[]> | null = null;
+
 /**
- * Loads all non-template projects (paginated server-side) for the Launches tab filter.
+ * Maps `/projects` rows to Launches filter options (id + title).
  */
-export async function fetchAllOverviewLaunchesProjectOptions(): Promise<OverviewLaunchesProjectOption[]> {
-  const perPage = 100;
-  const first = await projectsApiService.getProjectsWithSort(1, perPage);
-  const options: OverviewLaunchesProjectOption[] = first.data.map((p: ApiProject) => ({
+function mapApiProjectsToOverviewOptions(data: ApiProject[]): OverviewLaunchesProjectOption[] {
+  return data.map((p: ApiProject) => ({
     id: p.attributes.id,
     name: p.attributes.title ?? '',
   }));
+}
+
+/**
+ * Fetches every page of non-template projects (paginated server-side) for the Launches tab filter.
+ * Pages after the first are requested in parallel to reduce total wait time.
+ */
+async function loadAllOverviewLaunchesProjectOptions(): Promise<OverviewLaunchesProjectOption[]> {
+  const perPage = 100;
+  const first = await projectsApiService.getProjectsWithSort(1, perPage);
+  const options: OverviewLaunchesProjectOption[] = mapApiProjectsToOverviewOptions(first.data);
   const totalPages = Math.max(1, Math.ceil(first.meta.totalItems / first.meta.itemsPerPage));
-  for (let page = 2; page <= totalPages; page++) {
-    const res = await projectsApiService.getProjectsWithSort(page, perPage);
-    options.push(
-      ...res.data.map((p: ApiProject) => ({
-        id: p.attributes.id,
-        name: p.attributes.title ?? '',
-      })),
+
+  if (totalPages > 1) {
+    const restPages = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, i) =>
+        projectsApiService.getProjectsWithSort(i + 2, perPage),
+      ),
     );
+    for (const res of restPages) {
+      options.push(...mapApiProjectsToOverviewOptions(res.data));
+    }
   }
+
   options.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
   return options;
+}
+
+/**
+ * Loads all non-template projects for the Launches tab filter (cached for the SPA session).
+ */
+export async function fetchAllOverviewLaunchesProjectOptions(): Promise<OverviewLaunchesProjectOption[]> {
+  if (overviewLaunchesProjectOptionsCache !== null) {
+    return overviewLaunchesProjectOptionsCache;
+  }
+  if (overviewLaunchesProjectOptionsInflight === null) {
+    overviewLaunchesProjectOptionsInflight = loadAllOverviewLaunchesProjectOptions()
+      .then(data => {
+        overviewLaunchesProjectOptionsCache = data;
+        return data;
+      })
+      .finally(() => {
+        overviewLaunchesProjectOptionsInflight = null;
+      });
+  }
+
+  return overviewLaunchesProjectOptionsInflight;
 }
 
 /**
