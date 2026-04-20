@@ -1,3 +1,11 @@
+## [1.18.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.17.0...1.18.0) (2026-04-20)
+
+### Features
+
+* **overview:** add XML overview UI with widgets, launches, and test log ([3aacbdf](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/3aacbdfb28321d2af34d0b27853481ba14f4aa17))
+* **overview:** enhance overview launches query with filtering options and improve data structure ([2523095](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/2523095325e9e02688e10075e8f0b31efcd6c5a4))
+* **overview:** implement accordion tree structure for test logs with keyword and message nodes ([f78ad18](https://gitlab.dvtech.io/qaautomation/services/back-office/-/commit/f78ad18fa34714fb5bda18f1db04d4682607b0ba))
+
 ## [1.17.0](https://gitlab.dvtech.io/qaautomation/services/back-office/-/compare/1.16.0...1.17.0) (2026-04-14)
 
 ### Features
