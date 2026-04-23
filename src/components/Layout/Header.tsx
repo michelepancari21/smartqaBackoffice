@@ -17,53 +17,47 @@ const Header: React.FC = () => {
   };
 
   return (
-    <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm sticky top-0 z-30">
-      {/* Top bar: logo + user controls */}
-      <div className="px-6 py-3">
-        <div className="flex items-center justify-between">
-          <Link
-            to="/projects"
-            className="flex items-center space-x-3 hover:opacity-80 transition-opacity group"
-            title="Go to projects"
-          >
-            <div className="relative">
-              <Hexagon className="w-7 h-7 text-cyan-600 dark:text-cyan-400 fill-cyan-600/20 dark:fill-cyan-400/20 group-hover:text-cyan-500 dark:group-hover:text-cyan-300 transition-colors" />
-            </div>
-            <span className="text-xl font-bold text-cyan-600 dark:text-cyan-400 group-hover:text-cyan-500 dark:group-hover:text-cyan-300 transition-colors">
-              SMARTQA
-            </span>
-          </Link>
+    <header className="bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 border-b border-slate-600/40 dark:border-slate-700/50 shadow-lg sticky top-0 z-30">
+      <div className="px-6 h-14 flex items-center">
+        {/* Left: Logo */}
+        <Link
+          to="/projects"
+          className="flex items-center space-x-2.5 hover:opacity-80 transition-opacity group shrink-0"
+          title="Go to projects"
+        >
+          <Hexagon className="w-7 h-7 text-cyan-400 fill-cyan-400/20 group-hover:text-cyan-300 transition-colors" />
+          <span className="text-lg font-bold text-cyan-400 group-hover:text-cyan-300 transition-colors tracking-wide">
+            SMARTQA
+          </span>
+        </Link>
 
-          <div className="flex items-center space-x-4">
-            <ThemeToggle />
-            <NotificationsBell />
-            <div className="h-6 w-px bg-slate-200 dark:bg-slate-600"></div>
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-teal-600 dark:from-cyan-400 dark:to-teal-500 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-white" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-slate-900 dark:text-white leading-tight">
-                  {state.user?.name || 'User'}
-                </span>
-                <span className="text-xs text-slate-500 dark:text-gray-400 leading-tight">
-                  {state.user?.email}
-                </span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="p-1.5 text-slate-400 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-md hover:bg-slate-100 dark:hover:bg-slate-700"
-                title="Logout"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+        {/* Center: Navigation */}
+        <div className="flex-1 flex justify-center">
+          <HeaderNav />
+        </div>
+
+        {/* Right: User controls */}
+        <div className="flex items-center gap-3 shrink-0">
+          <ThemeToggle />
+          <NotificationsBell />
+          <div className="h-5 w-px bg-slate-600/60"></div>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-full flex items-center justify-center">
+              <User className="w-3.5 h-3.5 text-white" />
             </div>
+            <span className="text-sm font-medium text-slate-200 hidden lg:block max-w-[120px] truncate">
+              {state.user?.name || 'User'}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="p-1.5 text-slate-400 hover:text-red-400 transition-colors rounded-md hover:bg-slate-700/50"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
-
-      {/* Navigation bar */}
-      <HeaderNav />
     </header>
   );
 };

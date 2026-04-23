@@ -28,6 +28,7 @@ import TestPlanDetails from './pages/TestPlanDetails';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import UploadFromPhonePage from './pages/UploadFromPhonePage';
+import Documentation from './pages/Documentation';
 import AutomatedExecutionTestCases from './pages/AutomatedExecutionTestCases';
 import AutomatedExecutionSteps from './pages/AutomatedExecutionSteps';
 
@@ -51,6 +52,7 @@ const AppContent: React.FC = () => {
               <Route path="dashboard" element={<Dashboard key={`dashboard-${Date.now()}`} />} />
               <Route path="overview" element={<Overview />} />
               <Route path="projects" element={<Projects />} />
+              <Route path="templates" element={<Projects />} />
               <Route path="test-cases" element={<TestCases />} />
               <Route path="shared-steps" element={<SharedSteps />} />
               <Route path="test-runs" element={<TestRuns />} />
@@ -60,6 +62,7 @@ const AppContent: React.FC = () => {
               <Route path="test-plans/:id" element={<TestPlanDetails />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="documentation" element={<Documentation />} />
               <Route path="automated-execution/:projectId" element={<AutomatedExecutionTestCases />} />
               <Route path="automated-execution/:projectId/test-case/:testCaseId" element={<AutomatedExecutionSteps />} />
             </Route>

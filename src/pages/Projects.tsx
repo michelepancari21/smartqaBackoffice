@@ -233,7 +233,9 @@ const Projects: React.FC = () => {
                        hasPermission(PERMISSIONS.PROJECT.DELETE) ||
                        hasPermission(PERMISSIONS.PROJECT.CREATE);
 
-  const [activeTab, setActiveTab] = useState<'projects' | 'templates'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'templates'>(
+    location.pathname === '/templates' ? 'templates' : 'projects'
+  );
 
   const {
     projects,
@@ -626,10 +628,20 @@ const Projects: React.FC = () => {
     setFilterMode('all');
     setSortBy('createdAt-desc');
     hasFetchedRef.current = false;
-  }, []);
+    navigate(tab === 'templates' ? '/templates' : '/projects');
+  }, [navigate]);
 
   useEffect(() => {
-    if (location.pathname !== '/projects') {
+    const tab = location.pathname === '/templates' ? 'templates' : 'projects';
+    if (tab !== activeTab) {
+      setActiveTab(tab);
+      hasFetchedRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (location.pathname !== '/projects' && location.pathname !== '/templates') {
       hasFetchedRef.current = false;
       if (appState.isNavigatingToProject) {
         dispatch({ type: 'SET_NAVIGATING_TO_PROJECT', payload: false });
