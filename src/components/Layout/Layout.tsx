@@ -8,6 +8,7 @@ import { useNotifications } from '../../context/NotificationsContext';
 
 const PROJECT_ROUTES = [
   '/dashboard',
+  '/projects',
   '/test-cases',
   '/shared-steps',
   '/test-runs',
