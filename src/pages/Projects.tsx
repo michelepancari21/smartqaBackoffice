@@ -16,6 +16,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { PERMISSIONS } from '../utils/permissions';
 import PermissionGuard from '../components/PermissionGuard';
 import { projectsApiService } from '../services/projectsApi';
+import ProjectCard from '../components/Project/ProjectCard';
 
 const ProjectFormModal: React.FC<{
   isOpen: boolean;
@@ -669,168 +670,218 @@ const Projects: React.FC = () => {
         </div>
       )}
 
-      {/* Table */}
-      <div className="relative bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden shadow-sm">
+      {/* Content */}
+      <div className="relative">
         {loading && (
-          <div className="absolute inset-0 bg-white/50 dark:bg-slate-900/50 flex items-center justify-center z-10">
+          <div className="absolute inset-0 bg-white/50 dark:bg-slate-900/50 flex items-center justify-center z-10 rounded-2xl">
             <Loader className="w-6 h-6 text-cyan-600 dark:text-cyan-400 animate-spin" />
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-700/60">
-                <th
-                  className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-gray-300 transition-colors w-20"
-                  onClick={() => handleColumnSort('id')}
-                >
-                  <span className="flex items-center">ID <SortIcon field="id" /></span>
-                </th>
-                <th className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">
-                  Project Name
-                </th>
-                <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
-                  Test Case
-                </th>
-                <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
-                  Test Runs
-                </th>
-                <th
-                  className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-gray-300 transition-colors w-44"
-                  onClick={() => handleColumnSort('updatedAt')}
-                >
-                  <span className="flex items-center">Modified <SortIcon field="updatedAt" /></span>
-                </th>
-                {hasAnyAction && (
-                  <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-28">
-                    Actions
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
-              {projects.map((project) => (
-                <tr
-                  key={project.id}
-                  onClick={() => handleProjectClick(project)}
-                  className="group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer"
-                >
-                  <td className="py-4 px-6 text-sm font-mono text-slate-500 dark:text-gray-400">
-                    #{project.id || 'N/A'}
-                  </td>
-                  <td className="py-4 px-6">
-                    <div>
-                      <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                        {project.name}
-                      </h3>
-                      <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5 line-clamp-1">{project.description}</p>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
-                        dispatch({ type: 'UPDATE_PROJECT', payload: project });
-                        navigate('/test-cases');
-                        toast.success(`Viewing test cases for ${project.name}`);
-                      }}
-                      className="text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors"
+        {viewMode === 'grid' ? (
+          /* ---- GRID VIEW ---- */
+          <>
+            {projects.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {projects.map((project) => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    onClick={() => handleProjectClick(project)}
+                    onEdit={() => openEditModal(project)}
+                    onDuplicate={() => openCloneModal(project)}
+                    onDelete={() => openDeleteDialog(project)}
+                    onTestCasesClick={(e) => {
+                      e.stopPropagation();
+                      dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
+                      dispatch({ type: 'UPDATE_PROJECT', payload: project });
+                      navigate('/test-cases');
+                      toast.success(`Viewing test cases for ${project.name}`);
+                    }}
+                    onTestRunsClick={(e) => {
+                      e.stopPropagation();
+                      dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
+                      dispatch({ type: 'UPDATE_PROJECT', payload: project });
+                      navigate('/test-runs');
+                      toast.success(`Viewing test runs for ${project.name}`);
+                    }}
+                    canEdit={hasPermission(PERMISSIONS.PROJECT.UPDATE)}
+                    canCreate={hasPermission(PERMISSIONS.PROJECT.CREATE)}
+                    canDelete={hasPermission(PERMISSIONS.PROJECT.DELETE)}
+                    disabled={isSubmitting}
+                  />
+                ))}
+              </div>
+            ) : !loading ? (
+              <div className="text-center py-16">
+                <Search className="w-12 h-12 mx-auto mb-4 text-slate-300 dark:text-gray-600" />
+                <p className="text-lg font-medium text-slate-500 dark:text-gray-400">No projects found</p>
+                <p className="text-sm text-slate-400 dark:text-gray-500 mt-1">
+                  {currentSearchTerm || filterMode !== 'all'
+                    ? 'Try adjusting your search or filters.'
+                    : 'Create your first project to get started.'}
+                </p>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          /* ---- LIST VIEW ---- */
+          <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-700/60">
+                    <th
+                      className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-gray-300 transition-colors w-20"
+                      onClick={() => handleColumnSort('id')}
                     >
-                      {project.testCasesCount} Test cases
-                    </button>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
-                        dispatch({ type: 'UPDATE_PROJECT', payload: project });
-                        navigate('/test-runs');
-                        toast.success(`Viewing test runs for ${project.name}`);
-                      }}
-                      className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 transition-colors"
+                      <span className="flex items-center">ID <SortIcon field="id" /></span>
+                    </th>
+                    <th className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">
+                      Project Name
+                    </th>
+                    <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
+                      Test Case
+                    </th>
+                    <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
+                      Test Runs
+                    </th>
+                    <th
+                      className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-gray-300 transition-colors w-44"
+                      onClick={() => handleColumnSort('updatedAt')}
                     >
-                      {project.testRunsCount > 0 ? `${project.testRunsCount} test run${project.testRunsCount !== 1 ? 's' : ''}` : 'No test run'}
-                    </button>
-                  </td>
-                  <td className="py-4 px-6 text-sm text-slate-500 dark:text-gray-400">
-                    {formatModifiedDate(project.updatedAt)}
-                  </td>
-                  {hasAnyAction && (
-                    <td className="py-4 px-6">
-                      <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        {hasPermission(PERMISSIONS.PROJECT.UPDATE) && (
-                          <button
-                            onClick={() => openEditModal(project)}
-                            className="p-2 text-slate-400 dark:text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                            title="Edit"
-                            disabled={isSubmitting}
-                          >
-                            <SquarePen className="w-4 h-4" />
-                          </button>
-                        )}
-                        <ActionMenu
-                          project={project}
-                          onDuplicate={openCloneModal}
-                          onDelete={openDeleteDialog}
-                          canCreate={hasPermission(PERMISSIONS.PROJECT.CREATE)}
-                          canDelete={hasPermission(PERMISSIONS.PROJECT.DELETE)}
-                          disabled={isSubmitting}
-                        />
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <span className="flex items-center">Modified <SortIcon field="updatedAt" /></span>
+                    </th>
+                    {hasAnyAction && (
+                      <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-28">
+                        Actions
+                      </th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
+                  {projects.map((project) => (
+                    <tr
+                      key={project.id}
+                      onClick={() => handleProjectClick(project)}
+                      className="group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer"
+                    >
+                      <td className="py-4 px-6 text-sm font-mono text-slate-500 dark:text-gray-400">
+                        #{project.id || 'N/A'}
+                      </td>
+                      <td className="py-4 px-6">
+                        <div>
+                          <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                            {project.name}
+                          </h3>
+                          <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5 line-clamp-1">{project.description}</p>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
+                            dispatch({ type: 'UPDATE_PROJECT', payload: project });
+                            navigate('/test-cases');
+                            toast.success(`Viewing test cases for ${project.name}`);
+                          }}
+                          className="text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors"
+                        >
+                          {project.testCasesCount} Test cases
+                        </button>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
+                            dispatch({ type: 'UPDATE_PROJECT', payload: project });
+                            navigate('/test-runs');
+                            toast.success(`Viewing test runs for ${project.name}`);
+                          }}
+                          className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 transition-colors"
+                        >
+                          {project.testRunsCount > 0 ? `${project.testRunsCount} test run${project.testRunsCount !== 1 ? 's' : ''}` : 'No test run'}
+                        </button>
+                      </td>
+                      <td className="py-4 px-6 text-sm text-slate-500 dark:text-gray-400">
+                        {formatModifiedDate(project.updatedAt)}
+                      </td>
+                      {hasAnyAction && (
+                        <td className="py-4 px-6">
+                          <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            {hasPermission(PERMISSIONS.PROJECT.UPDATE) && (
+                              <button
+                                onClick={() => openEditModal(project)}
+                                className="p-2 text-slate-400 dark:text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                title="Edit"
+                                disabled={isSubmitting}
+                              >
+                                <SquarePen className="w-4 h-4" />
+                              </button>
+                            )}
+                            <ActionMenu
+                              project={project}
+                              onDuplicate={openCloneModal}
+                              onDelete={openDeleteDialog}
+                              canCreate={hasPermission(PERMISSIONS.PROJECT.CREATE)}
+                              canDelete={hasPermission(PERMISSIONS.PROJECT.DELETE)}
+                              disabled={isSubmitting}
+                            />
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-          {projects.length === 0 && !loading && (
-            <div className="text-center py-16">
-              <Search className="w-12 h-12 mx-auto mb-4 text-slate-300 dark:text-gray-600" />
-              <p className="text-lg font-medium text-slate-500 dark:text-gray-400">No projects found</p>
-              <p className="text-sm text-slate-400 dark:text-gray-500 mt-1">
-                {currentSearchTerm || filterMode !== 'all'
-                  ? 'Try adjusting your search or filters.'
-                  : 'Create your first project to get started.'}
-              </p>
+              {projects.length === 0 && !loading && (
+                <div className="text-center py-16">
+                  <Search className="w-12 h-12 mx-auto mb-4 text-slate-300 dark:text-gray-600" />
+                  <p className="text-lg font-medium text-slate-500 dark:text-gray-400">No projects found</p>
+                  <p className="text-sm text-slate-400 dark:text-gray-500 mt-1">
+                    {currentSearchTerm || filterMode !== 'all'
+                      ? 'Try adjusting your search or filters.'
+                      : 'Create your first project to get started.'}
+                  </p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
+        {/* Pagination */}
         {pagination.totalPages > 1 && (
-          <div className="border-t border-slate-200 dark:border-slate-700/60 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-slate-500 dark:text-gray-400">
-                Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
-                {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of{' '}
-                {pagination.totalItems} projects
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handlePageChange(pagination.currentPage - 1)}
-                  disabled={pagination.currentPage === 1 || loading}
-                  icon={ChevronLeft}
-                >
-                  Previous
-                </Button>
-                <span className="text-sm text-slate-500 dark:text-gray-400">
-                  Page {pagination.currentPage} of {pagination.totalPages}
-                </span>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handlePageChange(pagination.currentPage + 1)}
-                  disabled={pagination.currentPage === pagination.totalPages || loading}
-                  icon={ChevronRight}
-                >
-                  Next
-                </Button>
-              </div>
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-sm text-slate-500 dark:text-gray-400">
+              Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
+              {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of{' '}
+              {pagination.totalItems} projects
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handlePageChange(pagination.currentPage - 1)}
+                disabled={pagination.currentPage === 1 || loading}
+                icon={ChevronLeft}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-slate-500 dark:text-gray-400">
+                Page {pagination.currentPage} of {pagination.totalPages}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handlePageChange(pagination.currentPage + 1)}
+                disabled={pagination.currentPage === pagination.totalPages || loading}
+                icon={ChevronRight}
+              >
+                Next
+              </Button>
             </div>
           </div>
         )}
