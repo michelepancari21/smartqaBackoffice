@@ -690,12 +690,12 @@ const Templates: React.FC = () => {
                     </div>
                   </td>
                   <td className="py-4 px-6 text-center">
-                    <span className="text-sm font-medium text-cyan-600 dark:text-cyan-400">
+                    <span className="text-sm font-medium text-cyan-600 dark:text-cyan-400 whitespace-nowrap">
                       {template.testCasesCount} Test cases
                     </span>
                   </td>
                   <td className="py-4 px-6 text-center">
-                    <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                    <span className="text-sm font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap">
                       {template.testRunsCount > 0 ? `${template.testRunsCount} test run${template.testRunsCount !== 1 ? 's' : ''}` : 'No test run'}
                     </span>
                   </td>

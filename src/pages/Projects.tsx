@@ -786,7 +786,7 @@ const Projects: React.FC = () => {
                             navigate('/test-cases');
                             toast.success(`Viewing test cases for ${project.name}`);
                           }}
-                          className="text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors"
+                          className="text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors whitespace-nowrap"
                         >
                           {project.testCasesCount} Test cases
                         </button>
@@ -800,7 +800,7 @@ const Projects: React.FC = () => {
                             navigate('/test-runs');
                             toast.success(`Viewing test runs for ${project.name}`);
                           }}
-                          className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 transition-colors"
+                          className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 transition-colors whitespace-nowrap"
                         >
                           {project.testRunsCount > 0 ? `${project.testRunsCount} test run${project.testRunsCount !== 1 ? 's' : ''}` : 'No test run'}
                         </button>
