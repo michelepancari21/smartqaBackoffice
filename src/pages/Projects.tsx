@@ -1,7 +1,9 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Plus, Search, Filter, SquarePen, Trash2, Copy, ChevronLeft, ChevronRight, Loader, FolderOpen, Globe } from 'lucide-react';
+import {
+  Plus, Search, SquarePen, Trash2, Copy, ChevronLeft, ChevronRight,
+  Loader, FolderOpen, Globe, MoreVertical, List, LayoutGrid, ChevronUp, ChevronDown
+} from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Modal from '../components/UI/Modal';
 import ConfirmDialog from '../components/UI/ConfirmDialog';
@@ -219,6 +221,88 @@ const CloneModal: React.FC<{
   );
 };
 
+const ActionMenu: React.FC<{
+  project: Project;
+  onDuplicate: (project: Project) => void;
+  onDelete: (project: Project) => void;
+  canCreate: boolean;
+  canDelete: boolean;
+  disabled: boolean;
+}> = ({ project, onDuplicate, onDelete, canCreate, canDelete, disabled }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  if (!canCreate && !canDelete) return null;
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        disabled={disabled}
+        className="p-2 text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+      >
+        <MoreVertical className="w-4 h-4" />
+      </button>
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 overflow-hidden">
+          {canCreate && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsOpen(false);
+                onDuplicate(project);
+              }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
+            >
+              <Copy className="w-4 h-4 text-slate-400 dark:text-gray-400" />
+              Duplicate Project
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsOpen(false);
+                onDelete(project);
+              }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Project
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+function formatModifiedDate(date: Date): string {
+  const months = [
+    'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+  ];
+  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+type SortField = 'id' | 'updatedAt';
+type SortDirection = 'asc' | 'desc';
+
 const Projects: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -234,6 +318,8 @@ const Projects: React.FC = () => {
                        hasPermission(PERMISSIONS.PROJECT.CREATE);
 
   const [activeTab, setActiveTab] = useState<'projects' | 'templates'>('projects');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [columnSort, setColumnSort] = useState<{ field: SortField; direction: SortDirection }>({ field: 'updatedAt', direction: 'desc' });
 
   const {
     projects,
@@ -323,7 +409,7 @@ const Projects: React.FC = () => {
     } else {
       await handleFilterChange(filterMode);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- SORT_OPTIONS, authState.user?.id, handleFilterChange are stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchProjects, searchProjectsCreatedByUser, searchTemplates, searchTemplatesCreatedByUser, filterMode, sortBy, activeTab]);
 
   const handleFilterChange = useCallback(async (mode: 'all' | 'my-projects') => {
@@ -347,7 +433,7 @@ const Projects: React.FC = () => {
         await fetchTemplatesWithSort(1, sortOption?.param);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- SORT_OPTIONS is a constant
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchProjectsCreatedByUser, fetchProjectsWithSort, fetchTemplatesCreatedByUser, fetchTemplatesWithSort, sortBy, authState, activeTab]);
 
   const handleSortChange = useCallback(async (newSortBy: string) => {
@@ -385,7 +471,7 @@ const Projects: React.FC = () => {
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- SORT_OPTIONS, authState.user?.id are stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchProjects, searchProjectsCreatedByUser, searchTemplates, searchTemplatesCreatedByUser, fetchProjectsCreatedByUser, fetchProjectsWithSort, fetchTemplatesCreatedByUser, fetchTemplatesWithSort, currentSearchTerm, filterMode, activeTab]);
 
   const handleSearchKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -394,6 +480,20 @@ const Projects: React.FC = () => {
       handleSearch(searchTerm);
     }
   }, [searchTerm, handleSearch]);
+
+  const handleColumnSort = useCallback((field: SortField) => {
+    const newDirection: SortDirection = columnSort.field === field && columnSort.direction === 'asc' ? 'desc' : 'asc';
+    setColumnSort({ field, direction: newDirection });
+
+    const sortMap: Record<string, string> = {
+      'id-asc': 'id-asc',
+      'id-desc': 'id-desc',
+      'updatedAt-asc': 'createdAt-asc',
+      'updatedAt-desc': 'updatedAt-desc',
+    };
+    const key = `${field}-${newDirection}`;
+    handleSortChange(sortMap[key] || 'createdAt-desc');
+  }, [columnSort, handleSortChange]);
 
   const handleCreateProject = useCallback(async () => {
     try {
@@ -416,11 +516,11 @@ const Projects: React.FC = () => {
       setNewProject({ name: '', description: '' });
       setSelectedTemplateId('');
     } catch {
-      // Error is already handled in the hook
+      // Error handled in hook
     } finally {
       setIsSubmitting(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadProjects is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createProject, cloneTemplateToProject, newProject, authState.user?.id, selectedTemplateId]);
 
   const handleCreateTemplate = useCallback(async () => {
@@ -430,7 +530,7 @@ const Projects: React.FC = () => {
       setIsCreateModalOpen(false);
       setNewProject({ name: '', description: '' });
     } catch {
-      // Error is already handled in the hook
+      // Error handled in hook
     } finally {
       setIsSubmitting(false);
     }
@@ -451,11 +551,11 @@ const Projects: React.FC = () => {
       setProjectToManage(null);
       setNewProject({ name: '', description: '' });
     } catch {
-      // Error is already handled in the hook
+      // Error handled in hook
     } finally {
       setIsSubmitting(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadProjects is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateProject, updateTemplate, projectToManage, newProject, activeTab]);
 
   const handleCloneProject = useCallback(async () => {
@@ -500,7 +600,7 @@ const Projects: React.FC = () => {
       setNewProject({ name: '', description: '' });
       setCloneType('template');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadProjects, authState.user are stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloneProject, cloneTemplate, cloneTemplateToProject, projectToManage, newProject, activeTab, cloneType, sortBy, fetchProjectsWithSort, fetchProjectsCreatedByUser, filterMode]);
 
   const handleDeleteProject = useCallback(async () => {
@@ -516,11 +616,11 @@ const Projects: React.FC = () => {
       }
       setProjectToManage(null);
     } catch {
-      // Error is already handled in the hook
+      // Error handled in hook
     } finally {
       setIsSubmitting(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadProjects is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deleteProject, deleteTemplate, projectToManage, activeTab]);
 
   const openEditModal = useCallback((project: Project) => {
@@ -581,38 +681,19 @@ const Projects: React.FC = () => {
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- SORT_OPTIONS, authState.user?.id are stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSearchTerm, filterMode, sortBy, activeTab, searchProjects, searchProjectsCreatedByUser, searchTemplates, searchTemplatesCreatedByUser, fetchProjectsCreatedByUser, fetchProjectsWithSort, fetchTemplatesCreatedByUser, fetchTemplatesWithSort]);
-
-  const clearAllFilters = useCallback(() => {
-    setSearchTerm('');
-    setCurrentSearchTerm('');
-    setFilterMode('all');
-    setSortBy('createdAt-desc');
-    const sortOption = SORT_OPTIONS.find(option => option.value === 'createdAt-desc');
-    if (activeTab === 'projects') {
-      fetchProjectsWithSort(1, sortOption?.param);
-    } else {
-      fetchTemplatesWithSort(1, sortOption?.param);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- SORT_OPTIONS is a constant
-  }, [fetchProjectsWithSort, fetchTemplatesWithSort, activeTab]);
 
   const handleProjectClick = useCallback((project: Project) => {
     dispatch({ type: 'SET_NAVIGATING_TO_PROJECT', payload: true });
 
-    // CRITICAL: Ensure the project exists in App context state
-    // If it doesn't exist, add it to the context
     const contextProject = getSelectedProject();
     if (!contextProject || contextProject.id !== project.id) {
-
       dispatch({ type: 'UPDATE_PROJECT', payload: project });
     }
 
-    // Set the selected project ID
     dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
 
-    // Use a small delay to ensure state is updated before navigation
     setTimeout(() => {
       toast.success(`Selected project: ${project.name}`);
       navigate('/dashboard');
@@ -692,7 +773,7 @@ const Projects: React.FC = () => {
   if (error && items.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-96">
-        <Card className="p-8 text-center">
+        <div className="p-8 text-center bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
           <div className="text-red-600 dark:text-red-400 mb-4">
             <p className="text-lg font-medium">Failed to load {activeTab}</p>
             <p className="text-sm text-slate-600 dark:text-gray-400 mt-2">{error}</p>
@@ -700,241 +781,266 @@ const Projects: React.FC = () => {
           <Button onClick={() => activeTab === 'projects' ? fetchProjects(1) : fetchTemplates(1)}>
             Try Again
           </Button>
-        </Card>
+        </div>
       </div>
     );
   }
 
+  const SortIcon: React.FC<{ field: SortField }> = ({ field }) => {
+    const isActive = columnSort.field === field;
+    return (
+      <span className="inline-flex flex-col ml-1 -space-y-1">
+        <ChevronUp className={`w-3 h-3 ${isActive && columnSort.direction === 'asc' ? 'text-cyan-400' : 'text-slate-500 dark:text-gray-600'}`} />
+        <ChevronDown className={`w-3 h-3 ${isActive && columnSort.direction === 'desc' ? 'text-cyan-400' : 'text-slate-500 dark:text-gray-600'}`} />
+      </span>
+    );
+  };
+
+  const entityLabel = activeTab === 'projects' ? 'Project' : 'Template';
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-            {activeTab === 'projects' ? 'Projects' : 'Templates'}
-          </h2>
-          <p className="text-slate-600 dark:text-gray-400">
-            Manage your testing {activeTab} ({pagination.totalItems} total)
-          </p>
+      {/* Page Title */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+          {activeTab === 'projects' ? 'Projects' : 'Templates'}
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-gray-400 mt-1 flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span><span className="font-semibold text-slate-700 dark:text-gray-200">{pagination.totalItems}</span> {activeTab} total</span>
+        </p>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
+          {/* Search */}
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search for project..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyPress={handleSearchKeyPress}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
+            />
+          </div>
+
+          {/* View filter dropdown */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-500 dark:text-gray-400">View</span>
+            <select
+              value={filterMode}
+              onChange={(e) => handleFilterChange(e.target.value as 'all' | 'my-projects')}
+              className="px-3 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40 transition-all cursor-pointer"
+            >
+              <option value="all">All {entityLabel}</option>
+              <option value="my-projects">My {entityLabel}s</option>
+            </select>
+          </div>
+
+          {/* View mode toggles */}
+          <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2.5 transition-colors ${viewMode === 'list' ? 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2.5 transition-colors ${viewMode === 'grid' ? 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-        {activeTab === 'projects' ? (
-          <PermissionGuard permission={PERMISSIONS.PROJECT.CREATE}>
-            <Button
-              icon={Plus}
-              onClick={() => setIsCreateModalOpen(true)}
-            >
-              New Project
-            </Button>
-          </PermissionGuard>
-        ) : (
-          <PermissionGuard permission={PERMISSIONS.PROJECT.CREATE}>
-            <Button
-              icon={Plus}
-              onClick={() => setIsCreateModalOpen(true)}
-            >
-              New Template
-            </Button>
-          </PermissionGuard>
-        )}
+
+        {/* Create button */}
+        <PermissionGuard permission={PERMISSIONS.PROJECT.CREATE}>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Create new {activeTab === 'projects' ? 'project' : 'template'}
+          </button>
+        </PermissionGuard>
       </div>
 
       {/* Tabs */}
-      <Card className="p-0">
-        <div className="flex border-b border-slate-200 dark:border-slate-700">
+      <div className="flex border-b border-slate-200 dark:border-slate-700">
+        <button
+          onClick={() => handleTabChange('projects')}
+          className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 ${
+            activeTab === 'projects'
+              ? 'text-cyan-600 dark:text-cyan-400 border-cyan-600 dark:border-cyan-400'
+              : 'text-slate-500 dark:text-gray-400 border-transparent hover:text-slate-700 dark:hover:text-gray-200'
+          }`}
+        >
+          Projects
+        </button>
+        <button
+          onClick={() => handleTabChange('templates')}
+          className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 ${
+            activeTab === 'templates'
+              ? 'text-cyan-600 dark:text-cyan-400 border-cyan-600 dark:border-cyan-400'
+              : 'text-slate-500 dark:text-gray-400 border-transparent hover:text-slate-700 dark:hover:text-gray-200'
+          }`}
+        >
+          Templates
+        </button>
+      </div>
+
+      {/* Active filters */}
+      {(currentSearchTerm || filterMode !== 'all') && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-slate-500 dark:text-gray-400">Active filters:</span>
+          {currentSearchTerm && (
+            <span className="inline-flex items-center px-3 py-1 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-xs text-cyan-600 dark:text-cyan-400">
+              Search: &ldquo;{currentSearchTerm}&rdquo;
+            </span>
+          )}
+          {filterMode !== 'all' && (
+            <span className="inline-flex items-center px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs text-blue-600 dark:text-blue-400">
+              My {entityLabel}s
+            </span>
+          )}
           <button
-            onClick={() => handleTabChange('projects')}
-            className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-              activeTab === 'projects'
-                ? 'text-cyan-600 dark:text-cyan-400 border-b-2 border-cyan-600 dark:border-cyan-400'
-                : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+            onClick={() => {
+              setSearchTerm('');
+              setCurrentSearchTerm('');
+              setFilterMode('all');
+              setSortBy('createdAt-desc');
+              const sortOption = SORT_OPTIONS.find(option => option.value === 'createdAt-desc');
+              if (activeTab === 'projects') {
+                fetchProjectsWithSort(1, sortOption?.param);
+              } else {
+                fetchTemplatesWithSort(1, sortOption?.param);
+              }
+            }}
+            className="text-xs text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-white underline"
           >
-            Projects
-          </button>
-          <button
-            onClick={() => handleTabChange('templates')}
-            className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-              activeTab === 'templates'
-                ? 'text-cyan-600 dark:text-cyan-400 border-b-2 border-cyan-600 dark:border-cyan-400'
-                : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            Templates
+            Clear all
           </button>
         </div>
-      </Card>
+      )}
 
-      {/* Filters */}
-      <Card className="p-6">
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder={`Search ${activeTab} by title...`}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={handleSearchKeyPress}
-                className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
-              />
-            </div>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Filter className="w-4 h-4 text-slate-400 dark:text-gray-400" />
-              <select
-                value={filterMode}
-                onChange={(e) => handleFilterChange(e.target.value as 'all' | 'my-projects')}
-                className="px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
-              >
-                <option value="all">All {activeTab === 'projects' ? 'Projects' : 'Templates'}</option>
-                <option value="my-projects">My {activeTab === 'projects' ? 'Projects' : 'Templates'}</option>
-              </select>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-slate-500 dark:text-gray-400">Sort by:</span>
-              <select
-                value={sortBy}
-                onChange={(e) => handleSortChange(e.target.value)}
-                className="px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Active filters display */}
-        {(currentSearchTerm || filterMode !== 'all') && (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="text-sm text-slate-500 dark:text-gray-400">Active filters:</span>
-            {currentSearchTerm && (
-              <span className="inline-flex items-center px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 rounded-full text-sm text-cyan-600 dark:text-cyan-400">
-                Search: "{currentSearchTerm}"
-              </span>
-            )}
-            {filterMode !== 'all' && (
-              <span className="inline-flex items-center px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-sm text-blue-600 dark:text-blue-400">
-                Filter: {filterMode === 'my-projects' ? `My ${activeTab === 'projects' ? 'Projects' : 'Templates'}` : `All ${activeTab === 'projects' ? 'Projects' : 'Templates'}`}
-              </span>
-            )}
-            <button
-              onClick={clearAllFilters}
-              className="text-sm text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white underline"
-            >
-              Clear all filters
-            </button>
-          </div>
-        )}
-      </Card>
-
-      {/* Projects Table */}
-      <Card className="overflow-hidden">
+      {/* Table */}
+      <div className="relative bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden shadow-sm">
         {loading && (
-          <div className="absolute inset-0 bg-slate-100/50 dark:bg-slate-900/50 flex items-center justify-center z-10">
+          <div className="absolute inset-0 bg-white/50 dark:bg-slate-900/50 flex items-center justify-center z-10">
             <Loader className="w-6 h-6 text-cyan-600 dark:text-cyan-400 animate-spin" />
           </div>
         )}
-        
+
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-100 dark:bg-slate-800/50 border-b border-slate-300 dark:border-slate-700">
-              <tr>
-                <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400">ID</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400">Title</th>
-                <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400 whitespace-nowrap">Quick Links</th>
+            <thead>
+              <tr className="border-b border-slate-200 dark:border-slate-700/60">
+                <th
+                  className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-gray-300 transition-colors w-20"
+                  onClick={() => handleColumnSort('id')}
+                >
+                  <span className="flex items-center">
+                    ID <SortIcon field="id" />
+                  </span>
+                </th>
+                <th className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">
+                  {entityLabel} Name
+                </th>
+                <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
+                  Test Case
+                </th>
+                <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
+                  Test Runs
+                </th>
+                <th
+                  className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-gray-300 transition-colors w-44"
+                  onClick={() => handleColumnSort('updatedAt')}
+                >
+                  <span className="flex items-center">
+                    Modified <SortIcon field="updatedAt" />
+                  </span>
+                </th>
                 {hasAnyAction && (
-                  <th className="text-left py-4 px-6 text-sm font-medium text-slate-600 dark:text-gray-400">Actions</th>
+                  <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-28">
+                    Actions
+                  </th>
                 )}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
               {items.map((project) => (
-                <tr key={project.id} className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/30 transition-colors">
-                  <td className="py-4 px-6 text-sm text-slate-700 dark:text-gray-300 font-mono">
-                    #{project.id || 'NO_ID'}
+                <tr
+                  key={project.id}
+                  onClick={() => handleProjectClick(project)}
+                  className="group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer"
+                >
+                  <td className="py-4 px-6 text-sm font-mono text-slate-500 dark:text-gray-400">
+                    #{project.id || 'N/A'}
                   </td>
                   <td className="py-4 px-6">
                     <div>
-                      <button
-                        onClick={() => handleProjectClick(project)}
-                        className="text-left w-full group"
-                        disabled={!project.id || project.id === '' || project.id === 'undefined'}
-                      >
-                        <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors cursor-pointer">
-                          {project.name}
-                          {(!project.id || project.id === '' || project.id === 'undefined') && (
-                            <span className="text-red-400 text-xs ml-2">(NO ID)</span>
-                          )}
-                        </h3>
-                      </button>
-                      <p className="text-sm text-slate-600 dark:text-gray-400 mt-1">{project.description}</p>
+                      <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                        {project.name}
+                      </h3>
+                      <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5 line-clamp-1">{project.description}</p>
                     </div>
                   </td>
-                  <td className="py-4 px-6">
-                    <div className="text-sm space-y-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-
-                          // Set the selected project
-                          dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
-                          
-                          // Ensure the project exists in App context state
-                          dispatch({ type: 'UPDATE_PROJECT', payload: project });
-                          
-                          // Navigate to test cases page
-                          navigate('/test-cases');
-                          
-                          toast.success(`Viewing test cases for ${project.name}`);
-                        }}
-                        className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 cursor-pointer transition-colors text-left whitespace-nowrap"
-                      >
-                        {project.testCasesCount} Test Cases
-                      </button>
-                      <div className="text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 cursor-pointer whitespace-nowrap">
-                        {project.testRunsCount} Test Runs
-                      </div>
-                    </div>
+                  <td className="py-4 px-6 text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
+                        dispatch({ type: 'UPDATE_PROJECT', payload: project });
+                        navigate('/test-cases');
+                        toast.success(`Viewing test cases for ${project.name}`);
+                      }}
+                      className="text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors"
+                    >
+                      {project.testCasesCount} Test cases
+                    </button>
+                  </td>
+                  <td className="py-4 px-6 text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
+                        dispatch({ type: 'UPDATE_PROJECT', payload: project });
+                        navigate('/test-runs');
+                        toast.success(`Viewing test runs for ${project.name}`);
+                      }}
+                      className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 transition-colors"
+                    >
+                      {project.testRunsCount > 0 ? `${project.testRunsCount} test run${project.testRunsCount !== 1 ? 's' : ''}` : 'No test run'}
+                    </button>
+                  </td>
+                  <td className="py-4 px-6 text-sm text-slate-500 dark:text-gray-400">
+                    {formatModifiedDate(project.updatedAt)}
                   </td>
                   {hasAnyAction && (
                     <td className="py-4 px-6">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                         {hasPermission(PERMISSIONS.PROJECT.UPDATE) && (
                           <button
                             onClick={() => openEditModal(project)}
-                            className="p-2 text-slate-500 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                            className="p-2 text-slate-400 dark:text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                             title="Edit"
                             disabled={isSubmitting}
                           >
                             <SquarePen className="w-4 h-4" />
                           </button>
                         )}
-                        {hasPermission(PERMISSIONS.PROJECT.CREATE) && (
-                          <button
-                            onClick={() => openCloneModal(project)}
-                            className="p-2 text-slate-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                            title="Clone"
-                            disabled={isSubmitting}
-                          >
-                            <Copy className="w-4 h-4" />
-                          </button>
-                        )}
-                        {hasPermission(PERMISSIONS.PROJECT.DELETE) && (
-                          <button
-                            onClick={() => openDeleteDialog(project)}
-                            className="p-2 text-slate-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                            title="Delete"
-                            disabled={isSubmitting}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <ActionMenu
+                          project={project}
+                          onDuplicate={openCloneModal}
+                          onDelete={openDeleteDialog}
+                          canCreate={hasPermission(PERMISSIONS.PROJECT.CREATE)}
+                          canDelete={hasPermission(PERMISSIONS.PROJECT.DELETE)}
+                          disabled={isSubmitting}
+                        />
                       </div>
                     </td>
                   )}
@@ -942,28 +1048,26 @@ const Projects: React.FC = () => {
               ))}
             </tbody>
           </table>
-          
+
           {items.length === 0 && !loading && (
-            <div className="text-center py-12">
-              <div className="text-slate-500 dark:text-gray-400 mb-4">
-                <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">No {activeTab} found</p>
-                <p className="text-sm">
-                  {currentSearchTerm || filterMode !== 'all'
-                    ? `No ${activeTab} found matching your filters. Try adjusting your search or filters.`
-                    : `No ${activeTab} found.${activeTab === 'projects' ? ' Create your first project to get started.' : ''}`
-                  }
-                </p>
-              </div>
+            <div className="text-center py-16">
+              <Search className="w-12 h-12 mx-auto mb-4 text-slate-300 dark:text-gray-600" />
+              <p className="text-lg font-medium text-slate-500 dark:text-gray-400">No {activeTab} found</p>
+              <p className="text-sm text-slate-400 dark:text-gray-500 mt-1">
+                {currentSearchTerm || filterMode !== 'all'
+                  ? 'Try adjusting your search or filters.'
+                  : activeTab === 'projects' ? 'Create your first project to get started.' : 'No templates available.'
+                }
+              </p>
             </div>
           )}
         </div>
 
         {/* Pagination */}
         {pagination.totalPages > 1 && (
-          <div className="border-t border-slate-200 dark:border-slate-700 px-6 py-4">
+          <div className="border-t border-slate-200 dark:border-slate-700/60 px-6 py-4">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-slate-600 dark:text-gray-400">
+              <div className="text-sm text-slate-500 dark:text-gray-400">
                 Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
                 {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of{' '}
                 {pagination.totalItems} {activeTab}
@@ -978,7 +1082,7 @@ const Projects: React.FC = () => {
                 >
                   Previous
                 </Button>
-                <span className="text-sm text-slate-600 dark:text-gray-400">
+                <span className="text-sm text-slate-500 dark:text-gray-400">
                   Page {pagination.currentPage} of {pagination.totalPages}
                 </span>
                 <Button
@@ -994,7 +1098,7 @@ const Projects: React.FC = () => {
             </div>
           </div>
         )}
-      </Card>
+      </div>
 
       {/* Modals */}
       <ProjectModal
