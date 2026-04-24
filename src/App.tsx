@@ -26,6 +26,7 @@ import TestRunsOverview from './pages/TestRunsOverview';
 import Templates from './pages/Templates';
 import TestPlans from './pages/TestPlans';
 import TestPlanDetails from './pages/TestPlanDetails';
+import Documentation from './pages/Documentation';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import UploadFromPhonePage from './pages/UploadFromPhonePage';
@@ -53,6 +54,7 @@ const AppContent: React.FC = () => {
               <Route path="overview" element={<Overview />} />
               <Route path="projects" element={<Projects />} />
               <Route path="templates" element={<Templates />} />
+              <Route path="documentation" element={<Documentation />} />
               <Route path="test-cases" element={<TestCases />} />
               <Route path="shared-steps" element={<SharedSteps />} />
               <Route path="test-runs" element={<TestRuns />} />

@@ -31,7 +31,7 @@ const GlobalHeader: React.FC = () => {
     { path: '/projects', icon: FolderOpen, label: 'Projects', permissions: [] },
     { path: '/templates', icon: FileText, label: 'Templates', permissions: [PERMISSIONS.TEST_PLAN.READ] },
     { path: '/settings', icon: Settings, label: 'Settings', permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
-    { path: '/reports', icon: BookOpen, label: 'Documentation', permissions: [] },
+    { path: '/documentation', icon: BookOpen, label: 'Documentation', permissions: [] },
   ];
 
   const visibleNavItems = navItems.filter(
