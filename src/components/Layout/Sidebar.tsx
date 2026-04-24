@@ -3,12 +3,10 @@ import { useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
-  LayoutGrid,
   TestTube,
   Play,
   Calendar,
   BarChart3,
-  Settings,
   Layers,
   ChevronDown,
   Loader,
@@ -76,18 +74,6 @@ const Sidebar: React.FC = () => {
       label: 'Reports',
       permissions: [PERMISSIONS.TEST_RUN.READ]
     },
-    {
-      path: '/overview',
-      icon: LayoutGrid,
-      label: 'Overview',
-      permissions: [PERMISSIONS.ADMIN_PANEL.READ]
-    },
-    {
-      path: '/settings',
-      icon: Settings,
-      label: 'Settings',
-      permissions: [PERMISSIONS.ADMIN_PANEL.READ]
-    }
   ];
 
   const navItems = allNavItems.filter(item => {
@@ -338,7 +324,7 @@ const Sidebar: React.FC = () => {
   }, [isDropdownOpen, searchTerm]);
 
   return (
-    <aside className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 shadow-2xl">
+    <aside className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 shadow-2xl min-h-[calc(100vh-3.5rem)] sticky top-14">
       <nav className="p-4 space-y-2">
         {/* Projects Dropdown */}
         <div className="mb-4">
@@ -532,3 +518,5 @@ const Sidebar: React.FC = () => {
 };
 
 export default Sidebar;
+
+export default Sidebar
