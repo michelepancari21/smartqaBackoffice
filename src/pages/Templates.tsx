@@ -1,57 +1,50 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Plus, Search, SquarePen, Trash2, Copy, ChevronLeft, ChevronRight,
-  Loader, MoreVertical, List, LayoutGrid, ChevronUp, ChevronDown
+  Loader, FolderOpen, Globe, MoreVertical, List, LayoutGrid, ChevronUp, ChevronDown
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Button from '../components/UI/Button';
 import Modal from '../components/UI/Modal';
 import ConfirmDialog from '../components/UI/ConfirmDialog';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { useProjects } from '../hooks/useProjects';
+import { useTemplates } from '../hooks/useTemplates';
 import { Project } from '../types';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../hooks/usePermissions';
 import { PERMISSIONS } from '../utils/permissions';
 import PermissionGuard from '../components/PermissionGuard';
-import { projectsApiService } from '../services/projectsApi';
 
-const ProjectFormModal: React.FC<{
+const TemplateFormModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   onSubmit: () => void;
   title: string;
-  projectData: { name: string; description: string };
-  setProjectData: (data: { name: string; description: string }) => void;
+  templateData: { name: string; description: string };
+  setTemplateData: (data: { name: string; description: string }) => void;
   isSubmitting: boolean;
-  templates?: Project[];
-  selectedTemplateId?: string;
-  setSelectedTemplateId?: (id: string) => void;
-  templatesLoading?: boolean;
-}> = ({ isOpen, onClose, onSubmit, title, projectData, setProjectData, isSubmitting, templates, selectedTemplateId, setSelectedTemplateId, templatesLoading }) => {
+}> = ({ isOpen, onClose, onSubmit, title, templateData, setTemplateData, isSubmitting }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit();
   };
-
-  const isCreateProject = title.includes('Create');
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="small">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
-            Project Name *
+            Template Name *
           </label>
           <input
             type="text"
-            value={projectData.name}
-            onChange={(e) => setProjectData({ ...projectData, name: e.target.value })}
+            value={templateData.name}
+            onChange={(e) => setTemplateData({ ...templateData, name: e.target.value })}
             className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
             required
             disabled={isSubmitting}
-            placeholder="Enter project name"
+            placeholder="Enter template name"
             autoFocus
           />
         </div>
@@ -60,38 +53,15 @@ const ProjectFormModal: React.FC<{
             Description *
           </label>
           <textarea
-            value={projectData.description}
-            onChange={(e) => setProjectData({ ...projectData, description: e.target.value })}
+            value={templateData.description}
+            onChange={(e) => setTemplateData({ ...templateData, description: e.target.value })}
             rows={3}
             className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
             required
             disabled={isSubmitting}
-            placeholder="Enter project description"
+            placeholder="Enter template description"
           />
         </div>
-        {isCreateProject && templates && setSelectedTemplateId && (
-          <div>
-            <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
-              Default Template
-            </label>
-            <select
-              value={selectedTemplateId}
-              onChange={(e) => setSelectedTemplateId(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
-              disabled={isSubmitting || templatesLoading}
-            >
-              <option value="">None - Create Blank Project</option>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-            {templatesLoading && (
-              <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">Loading templates...</p>
-            )}
-          </div>
-        )}
         <div className="flex justify-end space-x-3 pt-4">
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
             Cancel
@@ -112,15 +82,17 @@ const ProjectFormModal: React.FC<{
   );
 };
 
-const CloneProjectModal: React.FC<{
+const CloneTemplateModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   onSubmit: () => void;
   title: string;
-  projectData: { name: string; description: string };
-  setProjectData: (data: { name: string; description: string }) => void;
+  templateData: { name: string; description: string };
+  setTemplateData: (data: { name: string; description: string }) => void;
   isSubmitting: boolean;
-}> = ({ isOpen, onClose, onSubmit, title, projectData, setProjectData, isSubmitting }) => {
+  cloneType: 'template' | 'project';
+  setCloneType: (type: 'template' | 'project') => void;
+}> = ({ isOpen, onClose, onSubmit, title, templateData, setTemplateData, isSubmitting, cloneType, setCloneType }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit();
@@ -131,16 +103,16 @@ const CloneProjectModal: React.FC<{
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
-            Project Name *
+            {cloneType === 'project' ? 'Project Name *' : 'Template Name *'}
           </label>
           <input
             type="text"
-            value={projectData.name}
-            onChange={(e) => setProjectData({ ...projectData, name: e.target.value })}
+            value={templateData.name}
+            onChange={(e) => setTemplateData({ ...templateData, name: e.target.value })}
             className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
             required
             disabled={isSubmitting}
-            placeholder="Enter project name"
+            placeholder={cloneType === 'project' ? 'Enter project name' : 'Enter template name'}
             autoFocus
           />
         </div>
@@ -149,13 +121,49 @@ const CloneProjectModal: React.FC<{
             Description
           </label>
           <textarea
-            value={projectData.description}
-            onChange={(e) => setProjectData({ ...projectData, description: e.target.value })}
+            value={templateData.description}
+            onChange={(e) => setTemplateData({ ...templateData, description: e.target.value })}
             rows={3}
             className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
             disabled={isSubmitting}
             placeholder="Enter description"
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
+            Target Section *
+          </label>
+          <div className="mb-3 px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-gray-400 text-sm">
+            Selected: {cloneType === 'template' ? 'Templates' : 'Projects'}
+          </div>
+          <div className="p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg space-y-2">
+            <button
+              type="button"
+              onClick={() => setCloneType('template')}
+              disabled={isSubmitting}
+              className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${
+                cloneType === 'template'
+                  ? 'bg-cyan-500 text-white'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-gray-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+              }`}
+            >
+              <FolderOpen className="w-5 h-5 mr-3" />
+              <span className="font-medium">Templates</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCloneType('project')}
+              disabled={isSubmitting}
+              className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${
+                cloneType === 'project'
+                  ? 'bg-cyan-500 text-white'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-gray-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+              }`}
+            >
+              <Globe className="w-5 h-5 mr-3" />
+              <span className="font-medium">Projects</span>
+            </button>
+          </div>
         </div>
         <div className="flex justify-end space-x-3 pt-4">
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
@@ -177,14 +185,14 @@ const CloneProjectModal: React.FC<{
   );
 };
 
-const ActionMenu: React.FC<{
-  project: Project;
-  onDuplicate: (project: Project) => void;
-  onDelete: (project: Project) => void;
+const TemplateActionMenu: React.FC<{
+  template: Project;
+  onDuplicate: (t: Project) => void;
+  onDelete: (t: Project) => void;
   canCreate: boolean;
   canDelete: boolean;
   disabled: boolean;
-}> = ({ project, onDuplicate, onDelete, canCreate, canDelete, disabled }) => {
+}> = ({ template, onDuplicate, onDelete, canCreate, canDelete, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -213,20 +221,20 @@ const ActionMenu: React.FC<{
         <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 overflow-hidden">
           {canCreate && (
             <button
-              onClick={(e) => { e.stopPropagation(); setIsOpen(false); onDuplicate(project); }}
+              onClick={(e) => { e.stopPropagation(); setIsOpen(false); onDuplicate(template); }}
               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
             >
               <Copy className="w-4 h-4 text-slate-400 dark:text-gray-400" />
-              Duplicate Project
+              Duplicate Template
             </button>
           )}
           {canDelete && (
             <button
-              onClick={(e) => { e.stopPropagation(); setIsOpen(false); onDelete(project); }}
+              onClick={(e) => { e.stopPropagation(); setIsOpen(false); onDelete(template); }}
               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
-              Delete Project
+              Delete Template
             </button>
           )}
         </div>
@@ -246,12 +254,10 @@ function formatModifiedDate(date: Date): string {
 type SortField = 'id' | 'updatedAt';
 type SortDirection = 'asc' | 'desc';
 
-const Projects: React.FC = () => {
+const Templates: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { getSelectedProject, state: appState } = useApp();
-  const { state: authState } = useAuth();
   const { dispatch, loadProjects } = useApp();
+  const { state: authState } = useAuth();
   const { hasPermission } = usePermissions();
   const hasFetchedRef = useRef(false);
 
@@ -263,35 +269,34 @@ const Projects: React.FC = () => {
   const [columnSort, setColumnSort] = useState<{ field: SortField; direction: SortDirection }>({ field: 'updatedAt', direction: 'desc' });
 
   const {
-    projects,
+    templates,
     loading,
     error,
     pagination,
-    fetchProjects,
-    searchProjects,
-    fetchProjectsCreatedByUser,
-    searchProjectsCreatedByUser,
-    fetchProjectsWithSort,
-    createProject,
-    updateProject,
-    deleteProject,
-    cloneProject
-  } = useProjects();
+    fetchTemplates,
+    searchTemplates,
+    fetchTemplatesCreatedByUser,
+    searchTemplatesCreatedByUser,
+    fetchTemplatesWithSort,
+    cloneTemplate,
+    cloneTemplateToProject,
+    createTemplate,
+    updateTemplate,
+    deleteTemplate
+  } = useTemplates();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
-  const [filterMode, setFilterMode] = useState<'all' | 'my-projects'>('all');
+  const [filterMode, setFilterMode] = useState<'all' | 'my-templates'>('all');
   const [sortBy, setSortBy] = useState('createdAt-desc');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [projectToManage, setProjectToManage] = useState<Project | null>(null);
+  const [templateToManage, setTemplateToManage] = useState<Project | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cloneType, setCloneType] = useState<'template' | 'project'>('template');
   const [formData, setFormData] = useState({ name: '', description: '' });
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [modalTemplates, setModalTemplates] = useState<Project[]>([]);
-  const [templatesLoadingForModal, setTemplatesLoadingForModal] = useState(false);
 
   const SORT_OPTIONS = useMemo(() => [
     { value: 'createdAt-desc', label: 'Creation Date (New to Old)', param: 'order[createdAt]=desc' },
@@ -308,50 +313,50 @@ const Projects: React.FC = () => {
     const sortOption = SORT_OPTIONS.find(o => o.value === sortBy);
 
     if (term.trim()) {
-      if (filterMode === 'my-projects') {
-        await searchProjectsCreatedByUser(term, authState.user?.id?.toString() || '', 1, sortOption?.param);
+      if (filterMode === 'my-templates') {
+        await searchTemplatesCreatedByUser(term, authState.user?.id?.toString() || '', 1, sortOption?.param);
       } else {
-        await searchProjects(term, 1, sortOption?.param);
+        await searchTemplates(term, 1, sortOption?.param);
       }
     } else {
       await handleFilterChange(filterMode);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchProjects, searchProjectsCreatedByUser, filterMode, sortBy]);
+  }, [searchTemplates, searchTemplatesCreatedByUser, filterMode, sortBy]);
 
-  const handleFilterChange = useCallback(async (mode: 'all' | 'my-projects') => {
+  const handleFilterChange = useCallback(async (mode: 'all' | 'my-templates') => {
     setFilterMode(mode);
     setSearchTerm('');
     setCurrentSearchTerm('');
     const sortOption = SORT_OPTIONS.find(o => o.value === sortBy);
 
-    if (mode === 'my-projects') {
-      await fetchProjectsCreatedByUser(authState.user?.id?.toString() || '', 1, sortOption?.param);
+    if (mode === 'my-templates') {
+      await fetchTemplatesCreatedByUser(authState.user?.id?.toString() || '', 1, sortOption?.param);
     } else {
-      await fetchProjectsWithSort(1, sortOption?.param);
+      await fetchTemplatesWithSort(1, sortOption?.param);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchProjectsCreatedByUser, fetchProjectsWithSort, sortBy, authState]);
+  }, [fetchTemplatesCreatedByUser, fetchTemplatesWithSort, sortBy, authState]);
 
   const handleSortChange = useCallback(async (newSortBy: string) => {
     setSortBy(newSortBy);
     const sortOption = SORT_OPTIONS.find(o => o.value === newSortBy);
 
     if (currentSearchTerm.trim()) {
-      if (filterMode === 'my-projects') {
-        await searchProjectsCreatedByUser(currentSearchTerm, authState.user?.id?.toString() || '', 1, sortOption?.param);
+      if (filterMode === 'my-templates') {
+        await searchTemplatesCreatedByUser(currentSearchTerm, authState.user?.id?.toString() || '', 1, sortOption?.param);
       } else {
-        await searchProjects(currentSearchTerm, 1, sortOption?.param);
+        await searchTemplates(currentSearchTerm, 1, sortOption?.param);
       }
     } else {
-      if (filterMode === 'my-projects') {
-        await fetchProjectsCreatedByUser(authState.user?.id?.toString() || '', 1, sortOption?.param);
+      if (filterMode === 'my-templates') {
+        await fetchTemplatesCreatedByUser(authState.user?.id?.toString() || '', 1, sortOption?.param);
       } else {
-        await fetchProjectsWithSort(1, sortOption?.param);
+        await fetchTemplatesWithSort(1, sortOption?.param);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchProjects, searchProjectsCreatedByUser, fetchProjectsCreatedByUser, fetchProjectsWithSort, currentSearchTerm, filterMode]);
+  }, [searchTemplates, searchTemplatesCreatedByUser, fetchTemplatesCreatedByUser, fetchTemplatesWithSort, currentSearchTerm, filterMode]);
 
   const handleSearchKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -370,95 +375,92 @@ const Projects: React.FC = () => {
     handleSortChange(sortMap[`${field}-${newDirection}`] || 'createdAt-desc');
   }, [columnSort, handleSortChange]);
 
-  const handleCreateProject = useCallback(async () => {
+  const handleCreateTemplate = useCallback(async () => {
     try {
       setIsSubmitting(true);
-      if (selectedTemplateId) {
-        await projectsApiService.cloneTemplateToProject(selectedTemplateId, {
+      await createTemplate(formData);
+      setIsCreateModalOpen(false);
+      setFormData({ name: '', description: '' });
+    } catch {
+      // Error handled in hook
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [createTemplate, formData]);
+
+  const handleEditTemplate = useCallback(async () => {
+    if (!templateToManage) return;
+    try {
+      setIsSubmitting(true);
+      await updateTemplate(templateToManage.id, formData);
+      setIsEditModalOpen(false);
+      setTemplateToManage(null);
+      setFormData({ name: '', description: '' });
+    } catch {
+      // Error handled in hook
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [updateTemplate, templateToManage, formData]);
+
+  const handleCloneTemplate = useCallback(async () => {
+    if (!templateToManage) return;
+    try {
+      setIsSubmitting(true);
+      if (cloneType === 'project') {
+        await cloneTemplateToProject(templateToManage.id, {
           title: formData.name,
           description: formData.description
         });
+        await loadProjects(true);
+        toast.success('Template cloned to Projects');
+        navigate('/projects');
       } else {
-        await createProject({ ...formData, userId: authState.user?.id });
+        await cloneTemplate(templateToManage.id, {
+          title: formData.name,
+          description: formData.description
+        });
       }
-      await loadProjects(true);
-      setIsCreateModalOpen(false);
-      setFormData({ name: '', description: '' });
-      setSelectedTemplateId('');
-    } catch {
-      // Error handled in hook
-    } finally {
-      setIsSubmitting(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createProject, formData, authState.user?.id, selectedTemplateId]);
-
-  const handleEditProject = useCallback(async () => {
-    if (!projectToManage) return;
-    try {
-      setIsSubmitting(true);
-      await updateProject(projectToManage.id, formData);
-      await loadProjects(true);
-      setIsEditModalOpen(false);
-      setProjectToManage(null);
-      setFormData({ name: '', description: '' });
-    } catch {
-      // Error handled in hook
-    } finally {
-      setIsSubmitting(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updateProject, projectToManage, formData]);
-
-  const handleCloneProject = useCallback(async () => {
-    if (!projectToManage) return;
-    try {
-      setIsSubmitting(true);
-      await cloneProject(projectToManage.id, {
-        title: formData.name,
-        description: formData.description
-      });
-      await loadProjects(true);
     } catch (err) {
-      console.error('Error cloning:', err);
+      console.error('Error cloning template:', err);
     } finally {
       setIsSubmitting(false);
       setIsCloneModalOpen(false);
-      setProjectToManage(null);
+      setTemplateToManage(null);
       setFormData({ name: '', description: '' });
+      setCloneType('template');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cloneProject, projectToManage, formData]);
+  }, [cloneTemplate, cloneTemplateToProject, templateToManage, formData, cloneType, navigate]);
 
-  const handleDeleteProject = useCallback(async () => {
-    if (!projectToManage) return;
+  const handleDeleteTemplate = useCallback(async () => {
+    if (!templateToManage) return;
     try {
       setIsSubmitting(true);
-      await deleteProject(projectToManage.id);
-      await loadProjects(true);
-      setProjectToManage(null);
+      await deleteTemplate(templateToManage.id);
+      setTemplateToManage(null);
     } catch {
       // Error handled in hook
     } finally {
       setIsSubmitting(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deleteProject, projectToManage]);
+  }, [deleteTemplate, templateToManage]);
 
-  const openEditModal = useCallback((project: Project) => {
-    setProjectToManage(project);
-    setFormData({ name: project.name, description: project.description });
+  const openEditModal = useCallback((t: Project) => {
+    setTemplateToManage(t);
+    setFormData({ name: t.name, description: t.description });
     setIsEditModalOpen(true);
   }, []);
 
-  const openCloneModal = useCallback((project: Project) => {
-    setProjectToManage(project);
-    setFormData({ name: `${project.name} (copy)`, description: project.description });
+  const openCloneModal = useCallback((t: Project) => {
+    setTemplateToManage(t);
+    setFormData({ name: `${t.name} (copy)`, description: t.description });
+    setCloneType('template');
     setIsCloneModalOpen(true);
   }, []);
 
-  const openDeleteDialog = useCallback((project: Project) => {
-    setProjectToManage(project);
+  const openDeleteDialog = useCallback((t: Project) => {
+    setTemplateToManage(t);
     setIsDeleteDialogOpen(true);
   }, []);
 
@@ -466,100 +468,60 @@ const Projects: React.FC = () => {
     const sortOption = SORT_OPTIONS.find(o => o.value === sortBy);
 
     if (currentSearchTerm.trim()) {
-      if (filterMode === 'my-projects') {
-        searchProjectsCreatedByUser(currentSearchTerm, authState.user?.id?.toString() || '', page, sortOption?.param);
+      if (filterMode === 'my-templates') {
+        searchTemplatesCreatedByUser(currentSearchTerm, authState.user?.id?.toString() || '', page, sortOption?.param);
       } else {
-        searchProjects(currentSearchTerm, page, sortOption?.param);
+        searchTemplates(currentSearchTerm, page, sortOption?.param);
       }
     } else {
-      if (filterMode === 'my-projects') {
-        fetchProjectsCreatedByUser(authState.user?.id?.toString() || '', page, sortOption?.param);
+      if (filterMode === 'my-templates') {
+        fetchTemplatesCreatedByUser(authState.user?.id?.toString() || '', page, sortOption?.param);
       } else {
-        fetchProjectsWithSort(page, sortOption?.param);
+        fetchTemplatesWithSort(page, sortOption?.param);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSearchTerm, filterMode, sortBy, searchProjects, searchProjectsCreatedByUser, fetchProjectsCreatedByUser, fetchProjectsWithSort]);
+  }, [currentSearchTerm, filterMode, sortBy, searchTemplates, searchTemplatesCreatedByUser, fetchTemplatesCreatedByUser, fetchTemplatesWithSort]);
 
-  const handleProjectClick = useCallback((project: Project) => {
+  const handleTemplateClick = useCallback((template: Project) => {
     dispatch({ type: 'SET_NAVIGATING_TO_PROJECT', payload: true });
-
-    const contextProject = getSelectedProject();
-    if (!contextProject || contextProject.id !== project.id) {
-      dispatch({ type: 'UPDATE_PROJECT', payload: project });
-    }
-
-    dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
+    dispatch({ type: 'UPDATE_PROJECT', payload: template });
+    dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: template.id });
 
     setTimeout(() => {
-      toast.success(`Selected project: ${project.name}`);
+      toast.success(`Selected template: ${template.name}`);
       navigate('/dashboard');
     }, 50);
-  }, [dispatch, navigate, getSelectedProject]);
+  }, [dispatch, navigate]);
 
   useEffect(() => {
-    if (location.pathname !== '/projects') {
-      hasFetchedRef.current = false;
-      if (appState.isNavigatingToProject) {
-        dispatch({ type: 'SET_NAVIGATING_TO_PROJECT', payload: false });
-      }
-      return;
-    }
-
-    if (appState.isNavigatingToProject) {
-      dispatch({ type: 'SET_NAVIGATING_TO_PROJECT', payload: false });
-      hasFetchedRef.current = false;
-      return;
-    }
-
     if (hasFetchedRef.current) return;
-
     const sortOption = SORT_OPTIONS.find(o => o.value === sortBy);
-    fetchProjectsWithSort(1, sortOption?.param);
+    fetchTemplatesWithSort(1, sortOption?.param);
     hasFetchedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, sortBy, appState.isNavigatingToProject]);
+  }, []);
 
-  useEffect(() => {
-    const fetchTemplatesForModal = async () => {
-      if (isCreateModalOpen) {
-        setTemplatesLoadingForModal(true);
-        try {
-          const response = await projectsApiService.getTemplates(1);
-          const transformedTemplates = response.data.map(apiTemplate =>
-            projectsApiService.transformApiProject(apiTemplate)
-          );
-          setModalTemplates(transformedTemplates);
-        } catch (err) {
-          console.error('Error fetching templates for modal:', err);
-        } finally {
-          setTemplatesLoadingForModal(false);
-        }
-      }
-    };
-    fetchTemplatesForModal();
-  }, [isCreateModalOpen]);
-
-  if (loading && projects.length === 0) {
+  if (loading && templates.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-96">
         <div className="text-center">
           <Loader className="w-8 h-8 text-cyan-600 dark:text-cyan-400 animate-spin mx-auto mb-4" />
-          <p className="text-slate-600 dark:text-gray-400">Loading projects...</p>
+          <p className="text-slate-600 dark:text-gray-400">Loading templates...</p>
         </div>
       </div>
     );
   }
 
-  if (error && projects.length === 0) {
+  if (error && templates.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-96">
         <div className="p-8 text-center bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
           <div className="text-red-600 dark:text-red-400 mb-4">
-            <p className="text-lg font-medium">Failed to load projects</p>
+            <p className="text-lg font-medium">Failed to load templates</p>
             <p className="text-sm text-slate-600 dark:text-gray-400 mt-2">{error}</p>
           </div>
-          <Button onClick={() => fetchProjects(1)}>Try Again</Button>
+          <Button onClick={() => fetchTemplates(1)}>Try Again</Button>
         </div>
       </div>
     );
@@ -579,10 +541,10 @@ const Projects: React.FC = () => {
     <div className="space-y-6">
       {/* Page Title */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Projects</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Templates</h1>
         <p className="text-sm text-slate-500 dark:text-gray-400 mt-1 flex items-center gap-2">
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span><span className="font-semibold text-slate-700 dark:text-gray-200">{pagination.totalItems}</span> projects total</span>
+          <span><span className="font-semibold text-slate-700 dark:text-gray-200">{pagination.totalItems}</span> templates total</span>
         </p>
       </div>
 
@@ -593,7 +555,7 @@ const Projects: React.FC = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500 w-4 h-4" />
             <input
               type="text"
-              placeholder="Search for project..."
+              placeholder="Search for template..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyPress={handleSearchKeyPress}
@@ -605,11 +567,11 @@ const Projects: React.FC = () => {
             <span className="text-sm text-slate-500 dark:text-gray-400">View</span>
             <select
               value={filterMode}
-              onChange={(e) => handleFilterChange(e.target.value as 'all' | 'my-projects')}
+              onChange={(e) => handleFilterChange(e.target.value as 'all' | 'my-templates')}
               className="px-3 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40 transition-all cursor-pointer"
             >
-              <option value="all">All Project</option>
-              <option value="my-projects">My Projects</option>
+              <option value="all">All Templates</option>
+              <option value="my-templates">My Templates</option>
             </select>
           </div>
 
@@ -635,7 +597,7 @@ const Projects: React.FC = () => {
             className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 transition-all"
           >
             <Plus className="w-4 h-4" />
-            Create new project
+            Create new template
           </button>
         </PermissionGuard>
       </div>
@@ -651,7 +613,7 @@ const Projects: React.FC = () => {
           )}
           {filterMode !== 'all' && (
             <span className="inline-flex items-center px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs text-blue-600 dark:text-blue-400">
-              My Projects
+              My Templates
             </span>
           )}
           <button
@@ -660,7 +622,7 @@ const Projects: React.FC = () => {
               setCurrentSearchTerm('');
               setFilterMode('all');
               setSortBy('createdAt-desc');
-              fetchProjectsWithSort(1, SORT_OPTIONS.find(o => o.value === 'createdAt-desc')?.param);
+              fetchTemplatesWithSort(1, SORT_OPTIONS.find(o => o.value === 'createdAt-desc')?.param);
             }}
             className="text-xs text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-white underline"
           >
@@ -688,7 +650,7 @@ const Projects: React.FC = () => {
                   <span className="flex items-center">ID <SortIcon field="id" /></span>
                 </th>
                 <th className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">
-                  Project Name
+                  Template Name
                 </th>
                 <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
                   Test Case
@@ -710,60 +672,42 @@ const Projects: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
-              {projects.map((project) => (
+              {templates.map((template) => (
                 <tr
-                  key={project.id}
-                  onClick={() => handleProjectClick(project)}
+                  key={template.id}
+                  onClick={() => handleTemplateClick(template)}
                   className="group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer"
                 >
                   <td className="py-4 px-6 text-sm font-mono text-slate-500 dark:text-gray-400">
-                    #{project.id || 'N/A'}
+                    #{template.id || 'N/A'}
                   </td>
                   <td className="py-4 px-6">
                     <div>
                       <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                        {project.name}
+                        {template.name}
                       </h3>
-                      <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5 line-clamp-1">{project.description}</p>
+                      <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5 line-clamp-1">{template.description}</p>
                     </div>
                   </td>
                   <td className="py-4 px-6 text-center">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
-                        dispatch({ type: 'UPDATE_PROJECT', payload: project });
-                        navigate('/test-cases');
-                        toast.success(`Viewing test cases for ${project.name}`);
-                      }}
-                      className="text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors"
-                    >
-                      {project.testCasesCount} Test cases
-                    </button>
+                    <span className="text-sm font-medium text-cyan-600 dark:text-cyan-400">
+                      {template.testCasesCount} Test cases
+                    </span>
                   </td>
                   <td className="py-4 px-6 text-center">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: project.id });
-                        dispatch({ type: 'UPDATE_PROJECT', payload: project });
-                        navigate('/test-runs');
-                        toast.success(`Viewing test runs for ${project.name}`);
-                      }}
-                      className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 transition-colors"
-                    >
-                      {project.testRunsCount > 0 ? `${project.testRunsCount} test run${project.testRunsCount !== 1 ? 's' : ''}` : 'No test run'}
-                    </button>
+                    <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                      {template.testRunsCount > 0 ? `${template.testRunsCount} test run${template.testRunsCount !== 1 ? 's' : ''}` : 'No test run'}
+                    </span>
                   </td>
                   <td className="py-4 px-6 text-sm text-slate-500 dark:text-gray-400">
-                    {formatModifiedDate(project.updatedAt)}
+                    {formatModifiedDate(template.updatedAt)}
                   </td>
                   {hasAnyAction && (
                     <td className="py-4 px-6">
                       <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                         {hasPermission(PERMISSIONS.PROJECT.UPDATE) && (
                           <button
-                            onClick={() => openEditModal(project)}
+                            onClick={() => openEditModal(template)}
                             className="p-2 text-slate-400 dark:text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                             title="Edit"
                             disabled={isSubmitting}
@@ -771,8 +715,8 @@ const Projects: React.FC = () => {
                             <SquarePen className="w-4 h-4" />
                           </button>
                         )}
-                        <ActionMenu
-                          project={project}
+                        <TemplateActionMenu
+                          template={template}
                           onDuplicate={openCloneModal}
                           onDelete={openDeleteDialog}
                           canCreate={hasPermission(PERMISSIONS.PROJECT.CREATE)}
@@ -787,14 +731,14 @@ const Projects: React.FC = () => {
             </tbody>
           </table>
 
-          {projects.length === 0 && !loading && (
+          {templates.length === 0 && !loading && (
             <div className="text-center py-16">
               <Search className="w-12 h-12 mx-auto mb-4 text-slate-300 dark:text-gray-600" />
-              <p className="text-lg font-medium text-slate-500 dark:text-gray-400">No projects found</p>
+              <p className="text-lg font-medium text-slate-500 dark:text-gray-400">No templates found</p>
               <p className="text-sm text-slate-400 dark:text-gray-500 mt-1">
                 {currentSearchTerm || filterMode !== 'all'
                   ? 'Try adjusting your search or filters.'
-                  : 'Create your first project to get started.'}
+                  : 'Create your first template to get started.'}
               </p>
             </div>
           )}
@@ -806,7 +750,7 @@ const Projects: React.FC = () => {
               <div className="text-sm text-slate-500 dark:text-gray-400">
                 Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
                 {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of{' '}
-                {pagination.totalItems} projects
+                {pagination.totalItems} templates
               </div>
               <div className="flex items-center space-x-2">
                 <Button
@@ -837,46 +781,44 @@ const Projects: React.FC = () => {
       </div>
 
       {/* Modals */}
-      <ProjectFormModal
+      <TemplateFormModal
         isOpen={isCreateModalOpen}
-        onClose={() => { setIsCreateModalOpen(false); setSelectedTemplateId(''); }}
-        onSubmit={handleCreateProject}
-        title="Create New Project"
-        projectData={formData}
-        setProjectData={setFormData}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSubmit={handleCreateTemplate}
+        title="Create New Template"
+        templateData={formData}
+        setTemplateData={setFormData}
         isSubmitting={isSubmitting}
-        templates={modalTemplates}
-        selectedTemplateId={selectedTemplateId}
-        setSelectedTemplateId={setSelectedTemplateId}
-        templatesLoading={templatesLoadingForModal}
       />
 
-      <ProjectFormModal
+      <TemplateFormModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        onSubmit={handleEditProject}
-        title="Edit Project"
-        projectData={formData}
-        setProjectData={setFormData}
+        onSubmit={handleEditTemplate}
+        title="Edit Template"
+        templateData={formData}
+        setTemplateData={setFormData}
         isSubmitting={isSubmitting}
       />
 
-      <CloneProjectModal
+      <CloneTemplateModal
         isOpen={isCloneModalOpen}
         onClose={() => setIsCloneModalOpen(false)}
-        onSubmit={handleCloneProject}
-        title="Clone Project"
-        projectData={formData}
-        setProjectData={setFormData}
+        onSubmit={handleCloneTemplate}
+        title="Clone Template"
+        templateData={formData}
+        setTemplateData={setFormData}
         isSubmitting={isSubmitting}
+        cloneType={cloneType}
+        setCloneType={setCloneType}
       />
 
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
-        onConfirm={handleDeleteProject}
-        title="Delete Project"
-        message={`Are you sure you want to delete the project "${projectToManage?.name}"? This action is irreversible and will delete all associated test cases, test runs, and data.`}
+        onConfirm={handleDeleteTemplate}
+        title="Delete Template"
+        message={`Are you sure you want to delete the template "${templateToManage?.name}"? This action is irreversible and will delete all associated test cases and data.`}
         confirmText="Delete"
         variant="danger"
       />
@@ -884,4 +826,4 @@ const Projects: React.FC = () => {
   );
 };
 
-export default Projects;
+export default Templates;

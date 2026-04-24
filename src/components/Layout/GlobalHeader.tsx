@@ -29,7 +29,7 @@ const GlobalHeader: React.FC = () => {
   const navItems = [
     { path: '/overview', icon: LayoutGrid, label: 'Overview', permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
     { path: '/projects', icon: FolderOpen, label: 'Projects', permissions: [] },
-    { path: '/test-plans', icon: FileText, label: 'Templates', permissions: [PERMISSIONS.TEST_PLAN.READ] },
+    { path: '/templates', icon: FileText, label: 'Templates', permissions: [PERMISSIONS.TEST_PLAN.READ] },
     { path: '/settings', icon: Settings, label: 'Settings', permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
     { path: '/reports', icon: BookOpen, label: 'Documentation', permissions: [] },
   ];

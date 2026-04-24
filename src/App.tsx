@@ -23,6 +23,7 @@ import SharedSteps from './pages/SharedSteps';
 import TestRuns from './pages/TestRuns';
 import TestRunDetails from './pages/TestRunDetails';
 import TestRunsOverview from './pages/TestRunsOverview';
+import Templates from './pages/Templates';
 import TestPlans from './pages/TestPlans';
 import TestPlanDetails from './pages/TestPlanDetails';
 import Reports from './pages/Reports';
@@ -51,6 +52,7 @@ const AppContent: React.FC = () => {
               <Route path="dashboard" element={<Dashboard key={`dashboard-${Date.now()}`} />} />
               <Route path="overview" element={<Overview />} />
               <Route path="projects" element={<Projects />} />
+              <Route path="templates" element={<Templates />} />
               <Route path="test-cases" element={<TestCases />} />
               <Route path="shared-steps" element={<SharedSteps />} />
               <Route path="test-runs" element={<TestRuns />} />
