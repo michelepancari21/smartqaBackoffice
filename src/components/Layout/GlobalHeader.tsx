@@ -17,14 +17,30 @@ import { PERMISSIONS } from '../../utils/permissions';
 import ThemeToggle from '../UI/ThemeToggle';
 import NotificationsBell from './NotificationsBell';
 
-// Routes that belong to each top-level section
-const SECTION_ROUTES: Record<string, string[]> = {
-  '/overview': ['/overview'],
-  '/projects': ['/projects', '/dashboard', '/test-cases', '/test-runs', '/test-plans', '/reports', '/shared-steps', '/test-run-details', '/test-plan-details', '/automated-execution'],
-  '/templates': ['/templates'],
-  '/settings': ['/settings'],
-  '/documentation': ['/documentation'],
+/**
+ * Maps each top-nav root to the set of route prefixes that belong to it.
+ * Each entry is an independent navigation root — no sharing between roots.
+ */
+const SECTION_PREFIXES: Record<string, string[]> = {
+  '/overview':       ['/overview'],
+  '/projects':       ['/projects', '/dashboard', '/test-cases', '/test-runs', '/test-plans', '/reports', '/shared-steps', '/test-runs-overview', '/automated-execution'],
+  '/templates':      ['/templates'],
+  '/settings':       ['/settings'],
+  '/documentation':  ['/documentation'],
 };
+
+function getSectionRoot(pathname: string, isTemplateMode: boolean): string {
+  // Template mode overrides normal path matching for /test-cases and /shared-steps
+  if (isTemplateMode && (pathname === '/test-cases' || pathname === '/shared-steps')) {
+    return '/templates';
+  }
+  for (const [root, prefixes] of Object.entries(SECTION_PREFIXES)) {
+    if (prefixes.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+      return root;
+    }
+  }
+  return '';
+}
 
 const GlobalHeader: React.FC = () => {
   const { state, logout } = useAuth();
@@ -33,29 +49,24 @@ const GlobalHeader: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const activeRoot = getSectionRoot(location.pathname, appState.isTemplateMode);
+
   const handleLogout = () => {
     logout();
     navigate('/');
   };
 
   const navItems = [
-    { path: '/overview', icon: LayoutGrid, label: 'Overview', permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
-    { path: '/projects', icon: FolderOpen, label: 'Projects', permissions: [] },
-    { path: '/templates', icon: FileText, label: 'Templates', permissions: [PERMISSIONS.TEST_PLAN.READ] },
-    { path: '/settings', icon: Settings, label: 'Settings', permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
-    { path: '/documentation', icon: BookOpen, label: 'Documentation', permissions: [] },
+    { path: '/overview',       icon: LayoutGrid, label: 'Overview',      permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
+    { path: '/projects',       icon: FolderOpen, label: 'Projects',      permissions: [] },
+    { path: '/templates',      icon: FileText,   label: 'Templates',     permissions: [PERMISSIONS.TEST_PLAN.READ] },
+    { path: '/settings',       icon: Settings,   label: 'Settings',      permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
+    { path: '/documentation',  icon: BookOpen,   label: 'Documentation', permissions: [] },
   ];
 
   const visibleNavItems = navItems.filter(
     (item) => item.permissions.length === 0 || hasAnyPermission(item.permissions)
   );
-
-  const isNavItemActive = (itemPath: string): boolean => {
-    // When in template mode, highlight Templates section regardless of current path
-    if (appState.isTemplateMode && itemPath === '/templates') return true;
-    const routes = SECTION_ROUTES[itemPath] ?? [itemPath];
-    return routes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'));
-  };
 
   return (
     <header className="sticky top-0 z-40 w-full bg-gradient-to-r from-slate-200 via-purple-100 to-slate-200 dark:from-slate-900 dark:via-purple-900 dark:to-slate-900 border-b border-purple-300/30 dark:border-purple-500/20 shadow-2xl">
@@ -75,23 +86,23 @@ const GlobalHeader: React.FC = () => {
         </Link>
 
         {/* Center: Navigation */}
-        <nav className="flex items-center space-x-1">
+        <nav className="flex items-center h-full">
           {visibleNavItems.map((item) => {
-            const active = isNavItemActive(item.path);
+            const active = activeRoot === item.path;
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`relative flex items-center space-x-2 px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                className={`relative flex items-center gap-2 px-4 h-14 text-sm font-medium transition-colors duration-150 ${
                   active
                     ? 'text-white dark:text-white'
-                    : 'text-slate-600 dark:text-purple-200 hover:text-purple-900 dark:hover:text-white hover:bg-purple-100/50 dark:hover:bg-white/10 rounded-lg'
+                    : 'text-slate-600 dark:text-purple-200 hover:text-purple-900 dark:hover:text-white'
                 }`}
               >
-                <item.icon className="w-4 h-4" />
+                <item.icon className="w-4 h-4 shrink-0" />
                 <span>{item.label}</span>
                 {active && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-white dark:bg-white rounded-full" />
+                  <span className="absolute bottom-0 inset-x-0 h-0.5 rounded-t-full bg-white/90" />
                 )}
               </Link>
             );
