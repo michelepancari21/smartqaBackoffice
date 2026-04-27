@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Plus, Search, SquarePen, Trash2, Copy, ChevronLeft, ChevronRight,
-  Loader, MoreVertical, List, LayoutGrid, ChevronUp, ChevronDown
+  Loader, MoreVertical, List, LayoutGrid, ChevronUp, ChevronDown, CheckCircle
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../components/UI/Button';
@@ -243,6 +243,68 @@ function formatModifiedDate(date: Date): string {
   ];
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }
+
+const CATEGORY_MAP: { pattern: RegExp; label: string; cls: string }[] = [
+  { pattern: /wl.?product|masterch|busuu|loyalty/i, label: 'WL Product', cls: 'bg-pink-500' },
+  { pattern: /music|playup/i,                        label: 'Music',      cls: 'bg-cyan-500' },
+  { pattern: /vod|playvod|playciné|playcinemas/i,    label: 'VOD',        cls: 'bg-orange-500' },
+  { pattern: /game|gaming|cartoon|playable/i,        label: 'Games',      cls: 'bg-green-500' },
+  { pattern: /sport/i,                               label: 'Sport',      cls: 'bg-red-500' },
+  { pattern: /ticketing|donation|sms/i,              label: 'Ticketing',  cls: 'bg-blue-500' },
+];
+
+function getProjectCategory(name: string): { label: string; cls: string } {
+  for (const cat of CATEGORY_MAP) {
+    if (cat.pattern.test(name)) return { label: cat.label, cls: cat.cls };
+  }
+  return { label: 'Project', cls: 'bg-slate-500' };
+}
+
+const ViewDropdown: React.FC<{
+  value: 'all' | 'my-projects';
+  onChange: (v: 'all' | 'my-projects') => void;
+}> = ({ value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const label = value === 'all' ? 'All Project' : 'My Projects';
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    if (isOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white hover:border-slate-300 dark:hover:border-slate-600 transition-all"
+      >
+        <span>{label}</span>
+        <ChevronDown className="w-4 h-4 text-slate-400" />
+      </button>
+      {isOpen && (
+        <div className="absolute left-0 top-full mt-1 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 overflow-hidden">
+          {(['all', 'my-projects'] as const).map(v => (
+            <button
+              key={v}
+              onClick={() => { onChange(v); setIsOpen(false); }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                v === value
+                  ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20'
+                  : 'text-slate-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-700/60'
+              }`}
+            >
+              {v === 'all' ? 'All Project' : 'My Projects'}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 type SortField = 'id' | 'updatedAt';
 type SortDirection = 'asc' | 'desc';
@@ -581,9 +643,9 @@ const Projects: React.FC = () => {
       {/* Page Title */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Projects</h1>
-        <p className="text-sm text-slate-500 dark:text-gray-400 mt-1 flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span><span className="font-semibold text-slate-700 dark:text-gray-200">{pagination.totalItems}</span> projects total</span>
+        <p className="text-sm text-slate-500 dark:text-gray-400 mt-1 flex items-center gap-1.5">
+          <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span><span className="font-semibold text-slate-700 dark:text-gray-200">{pagination.totalItems} done</span> this month</span>
         </p>
       </div>
 
@@ -604,14 +666,7 @@ const Projects: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-500 dark:text-gray-400">View</span>
-            <select
-              value={filterMode}
-              onChange={(e) => handleFilterChange(e.target.value as 'all' | 'my-projects')}
-              className="px-3 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40 transition-all cursor-pointer"
-            >
-              <option value="all">All Project</option>
-              <option value="my-projects">My Projects</option>
-            </select>
+            <ViewDropdown value={filterMode} onChange={handleFilterChange} />
           </div>
 
           <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
@@ -740,10 +795,10 @@ const Projects: React.FC = () => {
                     <th className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">
                       Project Name
                     </th>
-                    <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
+                    <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-36">
                       Test Case
                     </th>
-                    <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
+                    <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-36">
                       Test Runs
                     </th>
                     <th
@@ -753,7 +808,7 @@ const Projects: React.FC = () => {
                       <span className="flex items-center">Modified <SortIcon field="updatedAt" /></span>
                     </th>
                     {hasAnyAction && (
-                      <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-28">
+                      <th className="text-right py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-28">
                         Actions
                       </th>
                     )}
@@ -769,12 +824,19 @@ const Projects: React.FC = () => {
                       <td className="py-4 px-6 text-sm font-mono text-slate-500 dark:text-gray-400">
                         #{project.id || 'N/A'}
                       </td>
-                      <td className="py-4 px-6">
-                        <div>
-                          <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                            {project.name}
-                          </h3>
-                          <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5 line-clamp-1">{project.description}</p>
+                      <td className="py-4 px-6 align-middle">
+                        <div className="flex items-start gap-3">
+                          {(() => { const cat = getProjectCategory(project.name); return (
+                            <span className={`mt-0.5 inline-block shrink-0 px-2.5 py-0.5 text-xs font-semibold text-white rounded-md ${cat.cls}`}>
+                              {cat.label}
+                            </span>
+                          ); })()}
+                          <div>
+                            <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors leading-tight">
+                              {project.name}
+                            </h3>
+                            <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5 line-clamp-1">{project.description}</p>
+                          </div>
                         </div>
                       </td>
                       <td className="py-4 px-6 text-center">
@@ -786,7 +848,7 @@ const Projects: React.FC = () => {
                             navigate('/test-cases');
                             toast.success(`Viewing test cases for ${project.name}`);
                           }}
-                          className="text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors whitespace-nowrap"
+                          className="text-sm font-semibold text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors whitespace-nowrap"
                         >
                           {project.testCasesCount} Test cases
                         </button>
@@ -800,7 +862,7 @@ const Projects: React.FC = () => {
                             navigate('/test-runs');
                             toast.success(`Viewing test runs for ${project.name}`);
                           }}
-                          className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 transition-colors whitespace-nowrap"
+                          className="text-sm font-semibold text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 transition-colors whitespace-nowrap"
                         >
                           {project.testRunsCount > 0 ? `${project.testRunsCount} test run${project.testRunsCount !== 1 ? 's' : ''}` : 'No test run'}
                         </button>
@@ -809,8 +871,8 @@ const Projects: React.FC = () => {
                         {formatModifiedDate(project.updatedAt)}
                       </td>
                       {hasAnyAction && (
-                        <td className="py-4 px-6">
-                          <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-4 px-6 align-middle">
+                          <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                             {hasPermission(PERMISSIONS.PROJECT.UPDATE) && (
                               <button
                                 onClick={() => openEditModal(project)}
