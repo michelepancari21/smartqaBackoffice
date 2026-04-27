@@ -485,9 +485,10 @@ const Templates: React.FC = () => {
 
   const handleTemplateClick = useCallback((template: Project) => {
     dispatch({ type: 'SET_NAVIGATING_TO_PROJECT', payload: true });
+    dispatch({ type: 'SET_TEMPLATE_MODE', payload: true });
     dispatch({ type: 'UPDATE_PROJECT', payload: template });
     dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: template.id });
-    setTimeout(() => { toast.success(`Selected template: ${template.name}`); navigate('/dashboard'); }, 50);
+    setTimeout(() => { toast.success(`Selected template: ${template.name}`); navigate('/test-cases'); }, 50);
   }, [dispatch, navigate]);
 
   useEffect(() => {

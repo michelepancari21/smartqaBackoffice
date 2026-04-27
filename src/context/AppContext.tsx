@@ -20,6 +20,7 @@ interface AppState {
   isLoadingTags: boolean;
   isLoadingConfigurations: boolean;
   isNavigatingToProject: boolean;
+  isTemplateMode: boolean;
 }
 
 type AppAction =
@@ -35,6 +36,7 @@ type AppAction =
   | { type: 'SET_CURRENT_PROJECT'; payload: Project | null }
   | { type: 'SET_SELECTED_PROJECT_ID'; payload: string | null }
   | { type: 'SET_NAVIGATING_TO_PROJECT'; payload: boolean }
+  | { type: 'SET_TEMPLATE_MODE'; payload: boolean }
   | { type: 'ADD_TAG'; payload: Tag }
   | { type: 'ADD_CONFIGURATION'; payload: Configuration }
   | { type: 'ADD_TEST_CASE'; payload: TestCase }
@@ -91,6 +93,7 @@ const initialState: AppState = {
   currentProject: null,
   selectedProjectId: getStoredSelectedProjectId(),
   isNavigatingToProject: false,
+  isTemplateMode: false,
   isLoadingProjects: false,
   isLoadingTags: false,
   isLoadingConfigurations: false
@@ -157,6 +160,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, selectedProjectId: action.payload };
     case 'SET_NAVIGATING_TO_PROJECT':
       return { ...state, isNavigatingToProject: action.payload };
+    case 'SET_TEMPLATE_MODE':
+      return { ...state, isTemplateMode: action.payload };
     case 'ADD_TEST_CASE':
       return { ...state, testCases: [...state.testCases, action.payload] };
     case 'UPDATE_TEST_CASE':
