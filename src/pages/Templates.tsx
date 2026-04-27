@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
-  Plus, Search, SquarePen, Trash2, Copy, ChevronLeft, ChevronRight,
-  Loader, FolderOpen, Globe, MoreVertical, List, LayoutGrid, ChevronUp, ChevronDown
+  Plus, Search, SquarePen, Trash2, Copy,
+  ChevronLeft, ChevronRight, Loader, FolderOpen, Globe,
+  MoreVertical, ChevronDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/UI/Button';
@@ -16,6 +17,30 @@ import { usePermissions } from '../hooks/usePermissions';
 import { PERMISSIONS } from '../utils/permissions';
 import PermissionGuard from '../components/PermissionGuard';
 
+/* ------------------------------------------------------------------ */
+/* Category badge helper                                                */
+/* ------------------------------------------------------------------ */
+
+const CATEGORY_MAP: { pattern: RegExp; label: string; cls: string }[] = [
+  { pattern: /ticketing|donation|sms/i, label: 'Ticketing', cls: 'bg-blue-500' },
+  { pattern: /game|gaming|cartoon|playable/i, label: 'Games', cls: 'bg-green-500' },
+  { pattern: /wl product|busuu|loyalty|integration/i, label: 'WL Product', cls: 'bg-pink-500' },
+  { pattern: /vod|playciné|playcinemas/i, label: 'VOD', cls: 'bg-orange-500' },
+  { pattern: /music|playup/i, label: 'Music', cls: 'bg-cyan-500' },
+  { pattern: /sport/i, label: 'Sport', cls: 'bg-red-500' },
+];
+
+function getCategory(name: string): { label: string; cls: string } {
+  for (const cat of CATEGORY_MAP) {
+    if (cat.pattern.test(name)) return { label: cat.label, cls: cat.cls };
+  }
+  return { label: 'General', cls: 'bg-slate-500' };
+}
+
+/* ------------------------------------------------------------------ */
+/* TemplateFormModal                                                    */
+/* ------------------------------------------------------------------ */
+
 const TemplateFormModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -25,62 +50,44 @@ const TemplateFormModal: React.FC<{
   setTemplateData: (data: { name: string; description: string }) => void;
   isSubmitting: boolean;
 }> = ({ isOpen, onClose, onSubmit, title, templateData, setTemplateData, isSubmitting }) => {
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit();
-  };
-
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSubmit(); };
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="small">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
-            Template Name *
-          </label>
+          <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">Template Name *</label>
           <input
             type="text"
             value={templateData.name}
             onChange={(e) => setTemplateData({ ...templateData, name: e.target.value })}
-            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
-            required
-            disabled={isSubmitting}
-            placeholder="Enter template name"
-            autoFocus
+            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            required disabled={isSubmitting} placeholder="Enter template name" autoFocus
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
-            Description *
-          </label>
+          <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">Description *</label>
           <textarea
             value={templateData.description}
             onChange={(e) => setTemplateData({ ...templateData, description: e.target.value })}
             rows={3}
-            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
-            required
-            disabled={isSubmitting}
-            placeholder="Enter template description"
+            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            required disabled={isSubmitting} placeholder="Enter template description"
           />
         </div>
         <div className="flex justify-end space-x-3 pt-4">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Loader className="w-4 h-4 mr-2 animate-spin" />
-                {title.includes('Create') ? 'Creating...' : 'Updating...'}
-              </>
-            ) : (
-              title.includes('Create') ? 'Create' : 'Update'
-            )}
+            {isSubmitting ? <><Loader className="w-4 h-4 mr-2 animate-spin" />{title.includes('Create') ? 'Creating...' : 'Updating...'}</> : title.includes('Create') ? 'Create' : 'Update'}
           </Button>
         </div>
       </form>
     </Modal>
   );
 };
+
+/* ------------------------------------------------------------------ */
+/* CloneTemplateModal                                                   */
+/* ------------------------------------------------------------------ */
 
 const CloneTemplateModal: React.FC<{
   isOpen: boolean;
@@ -93,11 +100,7 @@ const CloneTemplateModal: React.FC<{
   cloneType: 'template' | 'project';
   setCloneType: (type: 'template' | 'project') => void;
 }> = ({ isOpen, onClose, onSubmit, title, templateData, setTemplateData, isSubmitting, cloneType, setCloneType }) => {
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit();
-  };
-
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSubmit(); };
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="small">
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -109,81 +112,51 @@ const CloneTemplateModal: React.FC<{
             type="text"
             value={templateData.name}
             onChange={(e) => setTemplateData({ ...templateData, name: e.target.value })}
-            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
-            required
-            disabled={isSubmitting}
-            placeholder={cloneType === 'project' ? 'Enter project name' : 'Enter template name'}
-            autoFocus
+            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            required disabled={isSubmitting}
+            placeholder={cloneType === 'project' ? 'Enter project name' : 'Enter template name'} autoFocus
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
-            Description
-          </label>
+          <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">Description</label>
           <textarea
             value={templateData.description}
             onChange={(e) => setTemplateData({ ...templateData, description: e.target.value })}
             rows={3}
-            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
-            disabled={isSubmitting}
-            placeholder="Enter description"
+            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            disabled={isSubmitting} placeholder="Enter description"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">
-            Target Section *
-          </label>
+          <label className="block text-sm font-medium text-slate-600 dark:text-gray-300 mb-2">Target Section *</label>
           <div className="mb-3 px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-gray-400 text-sm">
             Selected: {cloneType === 'template' ? 'Templates' : 'Projects'}
           </div>
           <div className="p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg space-y-2">
-            <button
-              type="button"
-              onClick={() => setCloneType('template')}
-              disabled={isSubmitting}
-              className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${
-                cloneType === 'template'
-                  ? 'bg-cyan-500 text-white'
-                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-gray-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-              }`}
-            >
-              <FolderOpen className="w-5 h-5 mr-3" />
-              <span className="font-medium">Templates</span>
+            <button type="button" onClick={() => setCloneType('template')} disabled={isSubmitting}
+              className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${cloneType === 'template' ? 'bg-cyan-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-gray-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>
+              <FolderOpen className="w-5 h-5 mr-3" /><span className="font-medium">Templates</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setCloneType('project')}
-              disabled={isSubmitting}
-              className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${
-                cloneType === 'project'
-                  ? 'bg-cyan-500 text-white'
-                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-gray-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-              }`}
-            >
-              <Globe className="w-5 h-5 mr-3" />
-              <span className="font-medium">Projects</span>
+            <button type="button" onClick={() => setCloneType('project')} disabled={isSubmitting}
+              className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${cloneType === 'project' ? 'bg-cyan-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-gray-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>
+              <Globe className="w-5 h-5 mr-3" /><span className="font-medium">Projects</span>
             </button>
           </div>
         </div>
         <div className="flex justify-end space-x-3 pt-4">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Loader className="w-4 h-4 mr-2 animate-spin" />
-                Duplicating...
-              </>
-            ) : (
-              'Duplicate'
-            )}
+            {isSubmitting ? <><Loader className="w-4 h-4 mr-2 animate-spin" />Duplicating...</> : 'Duplicate'}
           </Button>
         </div>
       </form>
     </Modal>
   );
 };
+
+/* ------------------------------------------------------------------ */
+/* TemplateActionMenu                                                   */
+/* ------------------------------------------------------------------ */
 
 const TemplateActionMenu: React.FC<{
   template: Project;
@@ -198,9 +171,7 @@ const TemplateActionMenu: React.FC<{
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setIsOpen(false);
     };
     if (isOpen) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -243,16 +214,110 @@ const TemplateActionMenu: React.FC<{
   );
 };
 
-function formatModifiedDate(date: Date): string {
-  const months = [
-    'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
-    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
-  ];
-  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
-}
+/* ------------------------------------------------------------------ */
+/* SortDropdown                                                         */
+/* ------------------------------------------------------------------ */
 
-type SortField = 'id' | 'updatedAt';
-type SortDirection = 'asc' | 'desc';
+const SortDropdown: React.FC<{
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}> = ({ value, options, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find(o => o.value === value);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    if (isOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white hover:border-slate-300 dark:hover:border-slate-600 transition-all"
+      >
+        <span>{selected?.label ?? 'Sort'}</span>
+        <ChevronDown className="w-4 h-4 text-slate-400" />
+      </button>
+      {isOpen && (
+        <div className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 overflow-hidden">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setIsOpen(false); }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                opt.value === value
+                  ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20'
+                  : 'text-slate-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-700/60'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* ViewDropdown (All Template / My Templates)                          */
+/* ------------------------------------------------------------------ */
+
+const ViewDropdown: React.FC<{
+  value: 'all' | 'my-templates';
+  onChange: (v: 'all' | 'my-templates') => void;
+}> = ({ value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const label = value === 'all' ? 'All Template' : 'My Templates';
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    if (isOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white hover:border-slate-300 dark:hover:border-slate-600 transition-all"
+      >
+        <span>{label}</span>
+        <ChevronDown className="w-4 h-4 text-slate-400" />
+      </button>
+      {isOpen && (
+        <div className="absolute left-0 top-full mt-1 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 overflow-hidden">
+          {(['all', 'my-templates'] as const).map(v => (
+            <button
+              key={v}
+              onClick={() => { onChange(v); setIsOpen(false); }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                v === value
+                  ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20'
+                  : 'text-slate-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-700/60'
+              }`}
+            >
+              {v === 'all' ? 'All Template' : 'My Templates'}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* Main page                                                            */
+/* ------------------------------------------------------------------ */
 
 const Templates: React.FC = () => {
   const navigate = useNavigate();
@@ -265,24 +330,12 @@ const Templates: React.FC = () => {
                        hasPermission(PERMISSIONS.PROJECT.DELETE) ||
                        hasPermission(PERMISSIONS.PROJECT.CREATE);
 
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  const [columnSort, setColumnSort] = useState<{ field: SortField; direction: SortDirection }>({ field: 'updatedAt', direction: 'desc' });
-
   const {
-    templates,
-    loading,
-    error,
-    pagination,
-    fetchTemplates,
-    searchTemplates,
-    fetchTemplatesCreatedByUser,
-    searchTemplatesCreatedByUser,
-    fetchTemplatesWithSort,
-    cloneTemplate,
-    cloneTemplateToProject,
-    createTemplate,
-    updateTemplate,
-    deleteTemplate
+    templates, loading, error, pagination,
+    fetchTemplates, searchTemplates,
+    fetchTemplatesCreatedByUser, searchTemplatesCreatedByUser,
+    fetchTemplatesWithSort, cloneTemplate, cloneTemplateToProject,
+    createTemplate, updateTemplate, deleteTemplate
   } = useTemplates();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -299,19 +352,18 @@ const Templates: React.FC = () => {
   const [formData, setFormData] = useState({ name: '', description: '' });
 
   const SORT_OPTIONS = useMemo(() => [
-    { value: 'createdAt-desc', label: 'Creation Date (New to Old)', param: 'order[createdAt]=desc' },
-    { value: 'createdAt-asc', label: 'Creation Date (Old to New)', param: 'order[createdAt]=asc' },
-    { value: 'id-asc', label: 'ID (Ascending)', param: 'order[id]=asc' },
-    { value: 'id-desc', label: 'ID (Descending)', param: 'order[id]=desc' },
-    { value: 'updatedAt-desc', label: 'Last Modified', param: 'order[updatedAt]=desc' },
-    { value: 'title-asc', label: 'Title (A-Z)', param: 'order[title]=asc' },
-    { value: 'title-desc', label: 'Title (Z-A)', param: 'order[title]=desc' }
+    { value: 'createdAt-desc', label: 'Creation date (New/Old)', param: 'order[createdAt]=desc' },
+    { value: 'createdAt-asc',  label: 'Creation date (Old/New)', param: 'order[createdAt]=asc' },
+    { value: 'id-asc',         label: 'ID (Ascending)',          param: 'order[id]=asc' },
+    { value: 'id-desc',        label: 'ID (Descending)',         param: 'order[id]=desc' },
+    { value: 'updatedAt-desc', label: 'Last Modified',           param: 'order[updatedAt]=desc' },
+    { value: 'title-asc',      label: 'Title (A-Z)',             param: 'order[title]=asc' },
+    { value: 'title-desc',     label: 'Title (Z-A)',             param: 'order[title]=desc' },
   ], []);
 
   const handleSearch = useCallback(async (term: string) => {
     setCurrentSearchTerm(term);
     const sortOption = SORT_OPTIONS.find(o => o.value === sortBy);
-
     if (term.trim()) {
       if (filterMode === 'my-templates') {
         await searchTemplatesCreatedByUser(term, authState.user?.id?.toString() || '', 1, sortOption?.param);
@@ -329,7 +381,6 @@ const Templates: React.FC = () => {
     setSearchTerm('');
     setCurrentSearchTerm('');
     const sortOption = SORT_OPTIONS.find(o => o.value === sortBy);
-
     if (mode === 'my-templates') {
       await fetchTemplatesCreatedByUser(authState.user?.id?.toString() || '', 1, sortOption?.param);
     } else {
@@ -341,7 +392,6 @@ const Templates: React.FC = () => {
   const handleSortChange = useCallback(async (newSortBy: string) => {
     setSortBy(newSortBy);
     const sortOption = SORT_OPTIONS.find(o => o.value === newSortBy);
-
     if (currentSearchTerm.trim()) {
       if (filterMode === 'my-templates') {
         await searchTemplatesCreatedByUser(currentSearchTerm, authState.user?.id?.toString() || '', 1, sortOption?.param);
@@ -358,34 +408,13 @@ const Templates: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTemplates, searchTemplatesCreatedByUser, fetchTemplatesCreatedByUser, fetchTemplatesWithSort, currentSearchTerm, filterMode]);
 
-  const handleSearchKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSearch(searchTerm);
-    }
-  }, [searchTerm, handleSearch]);
-
-  const handleColumnSort = useCallback((field: SortField) => {
-    const newDirection: SortDirection = columnSort.field === field && columnSort.direction === 'asc' ? 'desc' : 'asc';
-    setColumnSort({ field, direction: newDirection });
-    const sortMap: Record<string, string> = {
-      'id-asc': 'id-asc', 'id-desc': 'id-desc',
-      'updatedAt-asc': 'createdAt-asc', 'updatedAt-desc': 'updatedAt-desc',
-    };
-    handleSortChange(sortMap[`${field}-${newDirection}`] || 'createdAt-desc');
-  }, [columnSort, handleSortChange]);
-
   const handleCreateTemplate = useCallback(async () => {
     try {
       setIsSubmitting(true);
       await createTemplate(formData);
       setIsCreateModalOpen(false);
       setFormData({ name: '', description: '' });
-    } catch {
-      // Error handled in hook
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch { /* handled in hook */ } finally { setIsSubmitting(false); }
   }, [createTemplate, formData]);
 
   const handleEditTemplate = useCallback(async () => {
@@ -396,11 +425,7 @@ const Templates: React.FC = () => {
       setIsEditModalOpen(false);
       setTemplateToManage(null);
       setFormData({ name: '', description: '' });
-    } catch {
-      // Error handled in hook
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch { /* handled in hook */ } finally { setIsSubmitting(false); }
   }, [updateTemplate, templateToManage, formData]);
 
   const handleCloneTemplate = useCallback(async () => {
@@ -408,18 +433,12 @@ const Templates: React.FC = () => {
     try {
       setIsSubmitting(true);
       if (cloneType === 'project') {
-        await cloneTemplateToProject(templateToManage.id, {
-          title: formData.name,
-          description: formData.description
-        });
+        await cloneTemplateToProject(templateToManage.id, { title: formData.name, description: formData.description });
         await loadProjects(true);
         toast.success('Template cloned to Projects');
         navigate('/projects');
       } else {
-        await cloneTemplate(templateToManage.id, {
-          title: formData.name,
-          description: formData.description
-        });
+        await cloneTemplate(templateToManage.id, { title: formData.name, description: formData.description });
       }
     } catch (err) {
       console.error('Error cloning template:', err);
@@ -439,34 +458,15 @@ const Templates: React.FC = () => {
       setIsSubmitting(true);
       await deleteTemplate(templateToManage.id);
       setTemplateToManage(null);
-    } catch {
-      // Error handled in hook
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch { /* handled in hook */ } finally { setIsSubmitting(false); }
   }, [deleteTemplate, templateToManage]);
 
-  const openEditModal = useCallback((t: Project) => {
-    setTemplateToManage(t);
-    setFormData({ name: t.name, description: t.description });
-    setIsEditModalOpen(true);
-  }, []);
-
-  const openCloneModal = useCallback((t: Project) => {
-    setTemplateToManage(t);
-    setFormData({ name: `${t.name} (copy)`, description: t.description });
-    setCloneType('template');
-    setIsCloneModalOpen(true);
-  }, []);
-
-  const openDeleteDialog = useCallback((t: Project) => {
-    setTemplateToManage(t);
-    setIsDeleteDialogOpen(true);
-  }, []);
+  const openEditModal   = useCallback((t: Project) => { setTemplateToManage(t); setFormData({ name: t.name, description: t.description }); setIsEditModalOpen(true); }, []);
+  const openCloneModal  = useCallback((t: Project) => { setTemplateToManage(t); setFormData({ name: `${t.name} (copy)`, description: t.description }); setCloneType('template'); setIsCloneModalOpen(true); }, []);
+  const openDeleteDialog = useCallback((t: Project) => { setTemplateToManage(t); setIsDeleteDialogOpen(true); }, []);
 
   const handlePageChange = useCallback((page: number) => {
     const sortOption = SORT_OPTIONS.find(o => o.value === sortBy);
-
     if (currentSearchTerm.trim()) {
       if (filterMode === 'my-templates') {
         searchTemplatesCreatedByUser(currentSearchTerm, authState.user?.id?.toString() || '', page, sortOption?.param);
@@ -487,11 +487,7 @@ const Templates: React.FC = () => {
     dispatch({ type: 'SET_NAVIGATING_TO_PROJECT', payload: true });
     dispatch({ type: 'UPDATE_PROJECT', payload: template });
     dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: template.id });
-
-    setTimeout(() => {
-      toast.success(`Selected template: ${template.name}`);
-      navigate('/dashboard');
-    }, 50);
+    setTimeout(() => { toast.success(`Selected template: ${template.name}`); navigate('/dashboard'); }, 50);
   }, [dispatch, navigate]);
 
   useEffect(() => {
@@ -527,74 +523,53 @@ const Templates: React.FC = () => {
     );
   }
 
-  const SortIcon: React.FC<{ field: SortField }> = ({ field }) => {
-    const isActive = columnSort.field === field;
-    return (
-      <span className="inline-flex flex-col ml-1 -space-y-1">
-        <ChevronUp className={`w-3 h-3 ${isActive && columnSort.direction === 'asc' ? 'text-cyan-400' : 'text-slate-500 dark:text-gray-600'}`} />
-        <ChevronDown className={`w-3 h-3 ${isActive && columnSort.direction === 'desc' ? 'text-cyan-400' : 'text-slate-500 dark:text-gray-600'}`} />
-      </span>
-    );
-  };
-
   return (
     <div className="space-y-6">
-      {/* Page Title */}
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Templates</h1>
-        <p className="text-sm text-slate-500 dark:text-gray-400 mt-1 flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span><span className="font-semibold text-slate-700 dark:text-gray-200">{pagination.totalItems}</span> templates total</span>
+        <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
+          Manage reusable testing templates ({pagination.totalItems} total)
         </p>
       </div>
 
       {/* Toolbar */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex items-center gap-3 flex-1 flex-wrap">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500 w-4 h-4" />
             <input
               type="text"
               placeholder="Search for template..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyPress={handleSearchKeyPress}
+              onKeyPress={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(searchTerm); } }}
               className="w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
             />
           </div>
 
+          {/* View filter */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-500 dark:text-gray-400">View</span>
-            <select
-              value={filterMode}
-              onChange={(e) => handleFilterChange(e.target.value as 'all' | 'my-templates')}
-              className="px-3 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40 transition-all cursor-pointer"
-            >
-              <option value="all">All Templates</option>
-              <option value="my-templates">My Templates</option>
-            </select>
+            <span className="text-sm text-slate-500 dark:text-gray-400 whitespace-nowrap">View</span>
+            <ViewDropdown value={filterMode} onChange={handleFilterChange} />
           </div>
 
-          <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2.5 transition-colors ${viewMode === 'list' ? 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <List className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2.5 transition-colors ${viewMode === 'grid' ? 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
+          {/* Sort */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-500 dark:text-gray-400 whitespace-nowrap">Sort by</span>
+            <SortDropdown
+              value={sortBy}
+              options={SORT_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+              onChange={handleSortChange}
+            />
           </div>
         </div>
 
         <PermissionGuard permission={PERMISSIONS.PROJECT.CREATE}>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 transition-all"
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
             Create new template
@@ -602,7 +577,7 @@ const Templates: React.FC = () => {
         </PermissionGuard>
       </div>
 
-      {/* Active filters */}
+      {/* Active filters chips */}
       {(currentSearchTerm || filterMode !== 'all') && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-slate-500 dark:text-gray-400">Active filters:</span>
@@ -617,13 +592,7 @@ const Templates: React.FC = () => {
             </span>
           )}
           <button
-            onClick={() => {
-              setSearchTerm('');
-              setCurrentSearchTerm('');
-              setFilterMode('all');
-              setSortBy('createdAt-desc');
-              fetchTemplatesWithSort(1, SORT_OPTIONS.find(o => o.value === 'createdAt-desc')?.param);
-            }}
+            onClick={() => { setSearchTerm(''); setCurrentSearchTerm(''); setFilterMode('all'); setSortBy('createdAt-desc'); fetchTemplatesWithSort(1, SORT_OPTIONS.find(o => o.value === 'createdAt-desc')?.param); }}
             className="text-xs text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-white underline"
           >
             Clear all
@@ -632,196 +601,145 @@ const Templates: React.FC = () => {
       )}
 
       {/* Table */}
-      <div className="relative bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden shadow-sm">
+      <div className="relative">
         {loading && (
-          <div className="absolute inset-0 bg-white/50 dark:bg-slate-900/50 flex items-center justify-center z-10">
+          <div className="absolute inset-0 bg-white/50 dark:bg-slate-900/50 flex items-center justify-center z-10 rounded-2xl">
             <Loader className="w-6 h-6 text-cyan-600 dark:text-cyan-400 animate-spin" />
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-700/60">
-                <th
-                  className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-gray-300 transition-colors w-20"
-                  onClick={() => handleColumnSort('id')}
-                >
-                  <span className="flex items-center">ID <SortIcon field="id" /></span>
-                </th>
-                <th className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">
-                  Template Name
-                </th>
-                <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
-                  Test Case
-                </th>
-                <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-32">
-                  Test Runs
-                </th>
-                <th
-                  className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-gray-300 transition-colors w-44"
-                  onClick={() => handleColumnSort('updatedAt')}
-                >
-                  <span className="flex items-center">Modified <SortIcon field="updatedAt" /></span>
-                </th>
-                {hasAnyAction && (
-                  <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-28">
-                    Actions
+        <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-700/60">
+                  <th className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-20">
+                    ID
                   </th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
-              {templates.map((template) => (
-                <tr
-                  key={template.id}
-                  onClick={() => handleTemplateClick(template)}
-                  className="group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer"
-                >
-                  <td className="py-4 px-6 text-sm font-mono text-slate-500 dark:text-gray-400">
-                    #{template.id || 'N/A'}
-                  </td>
-                  <td className="py-4 px-6">
-                    <div>
-                      <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                        {template.name}
-                      </h3>
-                      <p className="text-sm text-slate-500 dark:text-gray-400 mt-0.5 line-clamp-1">{template.description}</p>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                    <span className="text-sm font-medium text-cyan-600 dark:text-cyan-400 whitespace-nowrap">
-                      {template.testCasesCount} Test cases
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                    <span className="text-sm font-medium text-purple-600 dark:text-purple-400 whitespace-nowrap">
-                      {template.testRunsCount > 0 ? `${template.testRunsCount} test run${template.testRunsCount !== 1 ? 's' : ''}` : 'No test run'}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-sm text-slate-500 dark:text-gray-400">
-                    {formatModifiedDate(template.updatedAt)}
-                  </td>
+                  <th className="text-left py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">
+                    Template Name
+                  </th>
+                  <th className="text-center py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-36">
+                    Test Case
+                  </th>
                   {hasAnyAction && (
-                    <td className="py-4 px-6">
-                      <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        {hasPermission(PERMISSIONS.PROJECT.UPDATE) && (
-                          <button
-                            onClick={() => openEditModal(template)}
-                            className="p-2 text-slate-400 dark:text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                            title="Edit"
-                            disabled={isSubmitting}
-                          >
-                            <SquarePen className="w-4 h-4" />
-                          </button>
-                        )}
-                        <TemplateActionMenu
-                          template={template}
-                          onDuplicate={openCloneModal}
-                          onDelete={openDeleteDialog}
-                          canCreate={hasPermission(PERMISSIONS.PROJECT.CREATE)}
-                          canDelete={hasPermission(PERMISSIONS.PROJECT.DELETE)}
-                          disabled={isSubmitting}
-                        />
-                      </div>
-                    </td>
+                    <th className="text-right py-3.5 px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500 w-28">
+                      Actions
+                    </th>
                   )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
+                {templates.map((template) => {
+                  const cat = getCategory(template.name);
+                  return (
+                    <tr
+                      key={template.id}
+                      onClick={() => handleTemplateClick(template)}
+                      className="group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer"
+                    >
+                      {/* ID */}
+                      <td className="py-4 px-6 text-sm font-mono text-slate-500 dark:text-gray-400 align-middle">
+                        #{template.id || 'N/A'}
+                      </td>
 
-          {templates.length === 0 && !loading && (
-            <div className="text-center py-16">
-              <Search className="w-12 h-12 mx-auto mb-4 text-slate-300 dark:text-gray-600" />
-              <p className="text-lg font-medium text-slate-500 dark:text-gray-400">No templates found</p>
-              <p className="text-sm text-slate-400 dark:text-gray-500 mt-1">
-                {currentSearchTerm || filterMode !== 'all'
-                  ? 'Try adjusting your search or filters.'
-                  : 'Create your first template to get started.'}
-              </p>
-            </div>
-          )}
+                      {/* Template Name + badge + description */}
+                      <td className="py-4 px-6 align-middle">
+                        <div className="flex items-start gap-3">
+                          <span className={`mt-0.5 inline-block shrink-0 px-2.5 py-0.5 text-xs font-semibold text-white rounded-md ${cat.cls}`}>
+                            {cat.label}
+                          </span>
+                          <div>
+                            <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors leading-tight">
+                              {template.name}
+                            </h3>
+                            <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5 line-clamp-1">
+                              {template.description}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Test Case count */}
+                      <td className="py-4 px-6 text-center align-middle">
+                        <span className="text-sm font-semibold text-cyan-600 dark:text-cyan-400 whitespace-nowrap">
+                          {template.testCasesCount} Test cases
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      {hasAnyAction && (
+                        <td className="py-4 px-6 align-middle">
+                          <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                            {hasPermission(PERMISSIONS.PROJECT.UPDATE) && (
+                              <button
+                                onClick={() => openEditModal(template)}
+                                className="p-2 text-slate-400 dark:text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                title="Edit"
+                                disabled={isSubmitting}
+                              >
+                                <SquarePen className="w-4 h-4" />
+                              </button>
+                            )}
+                            <TemplateActionMenu
+                              template={template}
+                              onDuplicate={openCloneModal}
+                              onDelete={openDeleteDialog}
+                              canCreate={hasPermission(PERMISSIONS.PROJECT.CREATE)}
+                              canDelete={hasPermission(PERMISSIONS.PROJECT.DELETE)}
+                              disabled={isSubmitting}
+                            />
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {templates.length === 0 && !loading && (
+              <div className="text-center py-16">
+                <Search className="w-12 h-12 mx-auto mb-4 text-slate-300 dark:text-gray-600" />
+                <p className="text-lg font-medium text-slate-500 dark:text-gray-400">No templates found</p>
+                <p className="text-sm text-slate-400 dark:text-gray-500 mt-1">
+                  {currentSearchTerm || filterMode !== 'all'
+                    ? 'Try adjusting your search or filters.'
+                    : 'Create your first template to get started.'}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
+        {/* Pagination */}
         {pagination.totalPages > 1 && (
-          <div className="border-t border-slate-200 dark:border-slate-700/60 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-slate-500 dark:text-gray-400">
-                Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
-                {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of{' '}
-                {pagination.totalItems} templates
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handlePageChange(pagination.currentPage - 1)}
-                  disabled={pagination.currentPage === 1 || loading}
-                  icon={ChevronLeft}
-                >
-                  Previous
-                </Button>
-                <span className="text-sm text-slate-500 dark:text-gray-400">
-                  Page {pagination.currentPage} of {pagination.totalPages}
-                </span>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handlePageChange(pagination.currentPage + 1)}
-                  disabled={pagination.currentPage === pagination.totalPages || loading}
-                  icon={ChevronRight}
-                >
-                  Next
-                </Button>
-              </div>
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-sm text-slate-500 dark:text-gray-400">
+              Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
+              {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of{' '}
+              {pagination.totalItems} templates
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button variant="secondary" size="sm" onClick={() => handlePageChange(pagination.currentPage - 1)} disabled={pagination.currentPage === 1 || loading} icon={ChevronLeft}>
+                Previous
+              </Button>
+              <span className="text-sm text-slate-500 dark:text-gray-400">
+                Page {pagination.currentPage} of {pagination.totalPages}
+              </span>
+              <Button variant="secondary" size="sm" onClick={() => handlePageChange(pagination.currentPage + 1)} disabled={pagination.currentPage === pagination.totalPages || loading} icon={ChevronRight}>
+                Next
+              </Button>
             </div>
           </div>
         )}
       </div>
 
       {/* Modals */}
-      <TemplateFormModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onSubmit={handleCreateTemplate}
-        title="Create New Template"
-        templateData={formData}
-        setTemplateData={setFormData}
-        isSubmitting={isSubmitting}
-      />
-
-      <TemplateFormModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        onSubmit={handleEditTemplate}
-        title="Edit Template"
-        templateData={formData}
-        setTemplateData={setFormData}
-        isSubmitting={isSubmitting}
-      />
-
-      <CloneTemplateModal
-        isOpen={isCloneModalOpen}
-        onClose={() => setIsCloneModalOpen(false)}
-        onSubmit={handleCloneTemplate}
-        title="Clone Template"
-        templateData={formData}
-        setTemplateData={setFormData}
-        isSubmitting={isSubmitting}
-        cloneType={cloneType}
-        setCloneType={setCloneType}
-      />
-
-      <ConfirmDialog
-        isOpen={isDeleteDialogOpen}
-        onClose={() => setIsDeleteDialogOpen(false)}
-        onConfirm={handleDeleteTemplate}
-        title="Delete Template"
-        message={`Are you sure you want to delete the template "${templateToManage?.name}"? This action is irreversible and will delete all associated test cases and data.`}
-        confirmText="Delete"
-        variant="danger"
-      />
+      <TemplateFormModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSubmit={handleCreateTemplate} title="Create New Template" templateData={formData} setTemplateData={setFormData} isSubmitting={isSubmitting} />
+      <TemplateFormModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSubmit={handleEditTemplate} title="Edit Template" templateData={formData} setTemplateData={setFormData} isSubmitting={isSubmitting} />
+      <CloneTemplateModal isOpen={isCloneModalOpen} onClose={() => setIsCloneModalOpen(false)} onSubmit={handleCloneTemplate} title="Clone Template" templateData={formData} setTemplateData={setFormData} isSubmitting={isSubmitting} cloneType={cloneType} setCloneType={setCloneType} />
+      <ConfirmDialog isOpen={isDeleteDialogOpen} onClose={() => setIsDeleteDialogOpen(false)} onConfirm={handleDeleteTemplate} title="Delete Template" message={`Are you sure you want to delete the template "${templateToManage?.name}"? This action is irreversible and will delete all associated test cases and data.`} confirmText="Delete" variant="danger" />
     </div>
   );
 };
