@@ -63,6 +63,10 @@ export interface CreateProjectRequest {
       title: string;
       description: string;
       is_template?: boolean;
+      country?: string;
+      url?: string;
+      category?: string;
+      project_type?: string;
     };
   };
 }
@@ -290,14 +294,24 @@ class ProjectsApiService {
   async createProject(projectData: {
     title: string;
     description: string;
+    country?: string;
+    url?: string;
+    category?: string;
+    project_type?: string;
   }): Promise<CreateProjectResponse> {
+    const attributes: CreateProjectRequest['data']['attributes'] = {
+      title: projectData.title,
+      description: projectData.description,
+    };
+    if (projectData.country) attributes.country = projectData.country;
+    if (projectData.url) attributes.url = projectData.url;
+    if (projectData.category) attributes.category = projectData.category;
+    if (projectData.project_type) attributes.project_type = projectData.project_type;
+
     const requestBody: CreateProjectRequest = {
       data: {
         type: "Project",
-        attributes: {
-          title: projectData.title,
-          description: projectData.description
-        }
+        attributes,
       }
     };
 
