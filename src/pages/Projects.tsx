@@ -18,6 +18,7 @@ import PermissionGuard from '../components/PermissionGuard';
 import { projectsApiService } from '../services/projectsApi';
 import ProjectCard from '../components/Project/ProjectCard';
 import CreateProjectModal, { CreateProjectFormData } from '../components/Project/CreateProjectModal';
+import EditProjectModal, { EditProjectFormData } from '../components/Project/EditProjectModal';
 
 const ProjectFormModal: React.FC<{
   isOpen: boolean;
@@ -462,22 +463,27 @@ const Projects: React.FC = () => {
     }
   }, [createProject, authState.user?.id, loadProjects]);
 
-  const handleEditProject = useCallback(async () => {
+  const handleEditProject = useCallback(async (data: EditProjectFormData) => {
     if (!projectToManage) return;
     try {
       setIsSubmitting(true);
-      await updateProject(projectToManage.id, formData);
+      await updateProject(projectToManage.id, {
+        name: data.name,
+        description: data.description,
+        country: data.country || undefined,
+        url: data.url || undefined,
+        category: data.category || undefined,
+        project_type: data.type || undefined,
+      });
       await loadProjects(true);
       setIsEditModalOpen(false);
       setProjectToManage(null);
-      setFormData({ name: '', description: '' });
     } catch {
       // Error handled in hook
     } finally {
       setIsSubmitting(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updateProject, projectToManage, formData]);
+  }, [updateProject, projectToManage, loadProjects]);
 
   const handleCloneProject = useCallback(async () => {
     if (!projectToManage) return;
@@ -964,14 +970,11 @@ const Projects: React.FC = () => {
         templatesLoading={templatesLoadingForModal}
       />
 
-      <ProjectFormModal
+      <EditProjectModal
         isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
+        project={projectToManage}
+        onClose={() => { setIsEditModalOpen(false); setProjectToManage(null); }}
         onSubmit={handleEditProject}
-        title="Edit Project"
-        projectData={formData}
-        setProjectData={setFormData}
-        isSubmitting={isSubmitting}
       />
 
       <CloneProjectModal

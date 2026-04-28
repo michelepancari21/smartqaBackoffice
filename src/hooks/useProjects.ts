@@ -295,12 +295,16 @@ export const useProjects = () => {
     );
   };
 
-  const updateProject = async (id: string, projectData: { name: string; description: string }) => {
+  const updateProject = async (id: string, projectData: { name: string; description: string; country?: string; url?: string; category?: string; project_type?: string; }) => {
     return withLoading(
       (async () => {
         const response = await projectsApiService.updateProject(id, {
           title: projectData.name,
-          description: projectData.description
+          description: projectData.description,
+          country: projectData.country,
+          url: projectData.url,
+          category: projectData.category,
+          project_type: projectData.project_type,
         });
         
         // Transform and update the project in the current list
