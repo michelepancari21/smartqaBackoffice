@@ -115,7 +115,7 @@ const TestCasesFilters: React.FC<TestCasesFiltersProps> = ({
           <PermissionGuard permission={PERMISSIONS.TEST_CASE.CREATE}>
             <button
               onClick={onCreateTestCase}
-              className="flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg bg-cyan-500 hover:bg-cyan-400 text-white transition-colors shrink-0 shadow-sm"
+              className="flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white shadow-lg hover:shadow-cyan-500/25 transition-all duration-200 shrink-0"
             >
               <Plus className="w-4 h-4" />
               Create new test case
