@@ -255,38 +255,6 @@ const Sidebar: React.FC = () => {
     return '🔍 Select Project';
   };
 
-  const handleClearProject = () => {
-    dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: null });
-    navigate('/projects');
-  };
-
-  const getProjectFilterInfo = () => {
-    if (location.pathname === '/projects') {
-      return null;
-    }
-
-    const selectedProject = getSelectedProject();
-    if (selectedProject) {
-      return (
-        <div className="px-4 py-2 mb-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="text-xs text-cyan-400 font-medium">Filtered by:</div>
-              <div className="text-sm text-slate-900 dark:text-white truncate">{selectedProject.name}</div>
-            </div>
-            <button
-              onClick={handleClearProject}
-              className="flex-shrink-0 p-1 hover:bg-cyan-500/20 rounded transition-colors group"
-              title="Clear filter"
-            >
-              <X className="w-4 h-4 text-cyan-400 group-hover:text-slate-900 dark:hover:text-white" />
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
 
   // Refresh projects when component mounts or when needed
   useEffect(() => {
@@ -556,9 +524,6 @@ const Sidebar: React.FC = () => {
             )}
           </div>
         </div>
-
-        {/* Project Filter Info */}
-        {getProjectFilterInfo()}
 
         {/* Other Navigation Items */}
         {navItems.map((item) => (
