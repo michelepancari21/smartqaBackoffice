@@ -51,7 +51,7 @@ const TableHeader: React.FC<{ visibleColumns: ColumnVisibility; hasAnyAction: bo
         <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">ID</th>
       )}
       {visibleColumns.title && (
-        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide">Project Name</th>
+        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide">Title</th>
       )}
       {visibleColumns.type && (
         <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Type</th>
