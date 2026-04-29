@@ -17,6 +17,8 @@ export interface ApiProject {
     test_suite_name?: string;
     gitlabProjectName?: string;
     testSuiteName?: string;
+    category?: string;
+    project_type?: string;
   };
   relationships: {
     testCases: {
@@ -63,6 +65,10 @@ export interface CreateProjectRequest {
       title: string;
       description: string;
       is_template?: boolean;
+      country?: string;
+      url?: string;
+      category?: string;
+      project_type?: string;
     };
   };
 }
@@ -77,6 +83,8 @@ export interface UpdateProjectRequest {
       url?: string;
       gitlab_project_name?: string;
       test_suite_name?: string;
+      category?: string;
+      project_type?: string;
     };
   };
 }
@@ -130,6 +138,8 @@ class ProjectsApiService {
       url: apiProject.attributes.url,
       gitlab_project_name: apiProject.attributes.gitlabProjectName ?? apiProject.attributes.gitlab_project_name,
       test_suite_name: apiProject.attributes.testSuiteName ?? apiProject.attributes.test_suite_name,
+      category: apiProject.attributes.category,
+      project_type: apiProject.attributes.project_type,
     };
   }
 
@@ -290,16 +300,20 @@ class ProjectsApiService {
   async createProject(projectData: {
     title: string;
     description: string;
+    country?: string;
+    url?: string;
+    category?: string;
+    project_type?: string;
   }): Promise<CreateProjectResponse> {
-    const requestBody: CreateProjectRequest = {
-      data: {
-        type: "Project",
-        attributes: {
-          title: projectData.title,
-          description: projectData.description
-        }
-      }
+    const attrs: CreateProjectRequest['data']['attributes'] = {
+      title: projectData.title,
+      description: projectData.description,
     };
+    if (projectData.country) attrs.country = projectData.country;
+    if (projectData.url) attrs.url = projectData.url;
+    if (projectData.category) attrs.category = projectData.category;
+    if (projectData.project_type) attrs.project_type = projectData.project_type;
+    const requestBody: CreateProjectRequest = { data: { type: "Project", attributes: attrs } };
 
     const response = await apiService.authenticatedRequest('/projects', {
       method: 'POST',
@@ -347,23 +361,19 @@ class ProjectsApiService {
     url?: string;
     gitlab_project_name?: string;
     test_suite_name?: string;
+    category?: string;
+    project_type?: string;
   }): Promise<UpdateProjectResponse> {
     const attributes: UpdateProjectRequest['data']['attributes'] = {
       title: projectData.title,
       description: projectData.description,
     };
-    if (projectData.country !== undefined) {
-      attributes.country = projectData.country;
-    }
-    if (projectData.url !== undefined) {
-      attributes.url = projectData.url;
-    }
-    if (projectData.gitlab_project_name !== undefined) {
-      attributes.gitlab_project_name = projectData.gitlab_project_name;
-    }
-    if (projectData.test_suite_name !== undefined) {
-      attributes.test_suite_name = projectData.test_suite_name;
-    }
+    if (projectData.country !== undefined) attributes.country = projectData.country;
+    if (projectData.url !== undefined) attributes.url = projectData.url;
+    if (projectData.gitlab_project_name !== undefined) attributes.gitlab_project_name = projectData.gitlab_project_name;
+    if (projectData.test_suite_name !== undefined) attributes.test_suite_name = projectData.test_suite_name;
+    if (projectData.category !== undefined) attributes.category = projectData.category;
+    if (projectData.project_type !== undefined) attributes.project_type = projectData.project_type;
     const requestBody: UpdateProjectRequest = {
       data: {
         type: "Project",
