@@ -305,15 +305,21 @@ class ProjectsApiService {
     category?: string;
     project_type?: string;
   }): Promise<CreateProjectResponse> {
-    const attrs: CreateProjectRequest['data']['attributes'] = {
+    const attributes: CreateProjectRequest['data']['attributes'] = {
       title: projectData.title,
       description: projectData.description,
     };
-    if (projectData.country) attrs.country = projectData.country;
-    if (projectData.url) attrs.url = projectData.url;
-    if (projectData.category) attrs.category = projectData.category;
-    if (projectData.project_type) attrs.project_type = projectData.project_type;
-    const requestBody: CreateProjectRequest = { data: { type: "Project", attributes: attrs } };
+    if (projectData.country) attributes.country = projectData.country;
+    if (projectData.url) attributes.url = projectData.url;
+    if (projectData.category) attributes.category = projectData.category;
+    if (projectData.project_type) attributes.project_type = projectData.project_type;
+
+    const requestBody: CreateProjectRequest = {
+      data: {
+        type: "Project",
+        attributes,
+      }
+    };
 
     const response = await apiService.authenticatedRequest('/projects', {
       method: 'POST',

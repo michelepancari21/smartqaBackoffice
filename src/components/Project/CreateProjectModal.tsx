@@ -12,6 +12,7 @@ const CATEGORIES = [
 ] as const;
 
 const WW_OPTION = { code: 'WW', name: 'WW (Worldwide)' };
+
 const ALL_COUNTRIES = [WW_OPTION, ...COUNTRY_CODES_ALPHA2];
 
 function isValidUrl(value: string): boolean {
@@ -69,6 +70,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
     }
   }, [isOpen]);
 
+  // Reset url when type changes to Native App
   useEffect(() => {
     if (form.type === 'Native App') {
       setForm(f => ({ ...f, url: '' }));
@@ -76,6 +78,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
     }
   }, [form.type]);
 
+  // Reset templateId when switching back to blank
   useEffect(() => {
     if (form.startFrom === 'blank') {
       setForm(f => ({ ...f, templateId: '' }));
@@ -104,6 +107,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
     if (!form.country) next.country = 'Country is required';
     if (!form.type) next.type = 'Type is required';
     if (!form.category) next.category = 'Category is required';
+    if (!form.startFrom) next.startFrom = 'Start from is required';
     if (form.startFrom === 'template' && !form.templateId) next.templateId = 'Please select a template';
     if (urlRequired && !form.url.trim()) next.url = 'Website URL is required for Webapp';
     if (form.url.trim() && !isValidUrl(form.url.trim())) next.url = 'Must be a valid URL (e.g. https://example.com)';
@@ -123,19 +127,22 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
   };
 
   const isFormValid =
-    !!form.name.trim() &&
-    !!form.country &&
-    !!form.type &&
-    !!form.category &&
-    (form.startFrom === 'blank' || (form.startFrom === 'template' && !!form.templateId)) &&
-    (!urlRequired || !!form.url.trim()) &&
+    form.name.trim() &&
+    form.country &&
+    form.type &&
+    form.category &&
+    (form.startFrom === 'blank' || (form.startFrom === 'template' && form.templateId)) &&
+    (!urlRequired || form.url.trim()) &&
     (!form.url.trim() || isValidUrl(form.url.trim()));
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={!submitting ? onClose : undefined} />
+
+      {/* Modal */}
       <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
@@ -151,6 +158,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+
+          {/* Project Name */}
           <Field label="Project name" required error={errors.name}>
             <input
               type="text"
@@ -163,6 +172,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
             />
           </Field>
 
+          {/* Country */}
           <Field label="Country" required error={errors.country}>
             <div className="relative">
               <button
@@ -172,9 +182,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
                 className={`${inputCls(!!errors.country)} flex items-center justify-between text-left`}
               >
                 <span className={selectedCountry ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}>
-                  {selectedCountry
-                    ? `${selectedCountry.code !== 'WW' ? selectedCountry.code + ' \u2013 ' : ''}${selectedCountry.name}`
-                    : 'Select a country'}
+                  {selectedCountry ? `${selectedCountry.code === 'WW' ? '' : selectedCountry.code + ' – '}${selectedCountry.name}` : 'Select a country'}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${countryOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -205,9 +213,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
                               : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
                           }`}
                         >
-                          {c.code === 'WW'
-                            ? <Globe className="w-3.5 h-3.5 shrink-0" />
-                            : <span className="w-7 text-xs font-mono text-slate-400 dark:text-slate-500 shrink-0">{c.code}</span>}
+                          {c.code === 'WW' && <Globe className="w-3.5 h-3.5 shrink-0" />}
+                          {c.code !== 'WW' && <span className="w-3.5 text-xs font-mono text-slate-400 dark:text-slate-500">{c.code}</span>}
                           {c.name}
                         </button>
                       </li>
@@ -218,13 +225,14 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
             </div>
           </Field>
 
+          {/* Type */}
           <Field label="Type" required error={errors.type}>
-            <div className="flex gap-5">
+            <div className="flex gap-4">
               {PROJECT_TYPES.map(t => (
                 <label key={t} className="flex items-center gap-1.5 cursor-pointer select-none">
                   <input
                     type="radio"
-                    name="create-project-type"
+                    name="project-type"
                     value={t}
                     checked={form.type === t}
                     onChange={() => set('type', t)}
@@ -237,8 +245,9 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
             </div>
           </Field>
 
+          {/* Website URL — visible for Webapp / Other */}
           {showUrlField && (
-            <Field label={urlRequired ? 'Website URL' : 'Website URL (optional)'} required={urlRequired} error={errors.url}>
+            <Field label={`Website URL${urlRequired ? '' : ' (optional)'}`} required={urlRequired} error={errors.url}>
               <input
                 type="text"
                 value={form.url}
@@ -250,6 +259,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
             </Field>
           )}
 
+          {/* Category */}
           <Field label="Category" required error={errors.category}>
             <select
               value={form.category}
@@ -258,10 +268,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
               className={inputCls(!!errors.category)}
             >
               <option value="">Select a label</option>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {CATEGORIES.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
           </Field>
 
+          {/* Description */}
           <Field label="Description" error={errors.description}>
             <textarea
               value={form.description}
@@ -273,7 +286,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
             />
           </Field>
 
-          <Field label="Start from" required>
+          {/* Start From */}
+          <Field label="Start from" required error={errors.startFrom}>
             <div className="flex gap-6">
               {(['blank', 'template'] as const).map(opt => (
                 <label key={opt} className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -286,7 +300,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
                     disabled={submitting}
                     className="accent-cyan-500 w-4 h-4"
                   />
-                  <span className="text-sm text-slate-700 dark:text-slate-300">
+                  <span className="text-sm text-slate-700 dark:text-slate-300 capitalize">
                     {opt === 'blank' ? 'Blank project' : 'Use a template'}
                   </span>
                 </label>
@@ -294,6 +308,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
             </div>
           </Field>
 
+          {/* Template selector */}
           {form.startFrom === 'template' && (
             <Field label="Choose template" required error={errors.templateId}>
               <select
@@ -302,12 +317,16 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
                 disabled={submitting || templatesLoading}
                 className={inputCls(!!errors.templateId)}
               >
-                <option value="">{templatesLoading ? 'Loading templates\u2026' : 'Select a template'}</option>
-                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                <option value="">
+                  {templatesLoading ? 'Loading templates…' : 'Select a template'}
+                </option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
               </select>
               {templatesLoading && (
                 <p className="mt-1 text-xs text-slate-400 flex items-center gap-1">
-                  <Loader className="w-3 h-3 animate-spin" /> Loading templates\u2026
+                  <Loader className="w-3 h-3 animate-spin" /> Loading templates…
                 </p>
               )}
             </Field>
@@ -325,13 +344,14 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
             Cancel
           </button>
           <button
-            type="button"
+            type="submit"
+            form="create-project-form"
             disabled={submitting || !isFormValid}
             onClick={handleSubmit}
             className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-all flex items-center gap-2 shadow-md shadow-cyan-500/20"
           >
             {submitting && <Loader className="w-4 h-4 animate-spin" />}
-            {submitting ? 'Creating\u2026' : 'Create project'}
+            {submitting ? 'Creating…' : 'Create project'}
           </button>
         </div>
       </div>
@@ -339,17 +359,25 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSubmit, templa
   );
 };
 
+// ---- helpers ----
+
 const inputCls = (hasError: boolean) =>
   `w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-700 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-colors ${
-    hasError ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+    hasError
+      ? 'border-red-400 dark:border-red-500'
+      : 'border-slate-300 dark:border-slate-600'
   }`;
 
-const Field: React.FC<{ label: string; required?: boolean; error?: string; children: React.ReactNode }> = ({
-  label, required, error, children,
-}) => (
+const Field: React.FC<{
+  label: string;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}> = ({ label, required, error, children }) => (
   <div>
     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-      {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      {label}
+      {required && <span className="text-red-500 ml-0.5">*</span>}
     </label>
     {children}
     {error && <p className="mt-1 text-xs text-red-500">{error}</p>}

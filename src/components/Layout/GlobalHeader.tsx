@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutGrid,
   FolderOpen,
@@ -11,15 +11,45 @@ import {
   LogOut,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { PERMISSIONS } from '../../utils/permissions';
 import ThemeToggle from '../UI/ThemeToggle';
 import NotificationsBell from './NotificationsBell';
 
+/**
+ * Maps each top-nav root to the set of route prefixes that belong to it.
+ * Each entry is an independent navigation root — no sharing between roots.
+ */
+const SECTION_PREFIXES: Record<string, string[]> = {
+  '/overview':       ['/overview'],
+  '/projects':       ['/projects', '/dashboard', '/test-cases', '/test-runs', '/test-plans', '/reports', '/shared-steps', '/test-runs-overview', '/automated-execution'],
+  '/templates':      ['/templates'],
+  '/settings':       ['/settings'],
+  '/documentation':  ['/documentation'],
+};
+
+function getSectionRoot(pathname: string, isTemplateMode: boolean): string {
+  // Template mode overrides normal path matching for /test-cases and /shared-steps
+  if (isTemplateMode && (pathname === '/test-cases' || pathname === '/shared-steps')) {
+    return '/templates';
+  }
+  for (const [root, prefixes] of Object.entries(SECTION_PREFIXES)) {
+    if (prefixes.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+      return root;
+    }
+  }
+  return '';
+}
+
 const GlobalHeader: React.FC = () => {
   const { state, logout } = useAuth();
+  const { state: appState } = useApp();
   const { hasAnyPermission } = usePermissions();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const activeRoot = getSectionRoot(location.pathname, appState.isTemplateMode);
 
   const handleLogout = () => {
     logout();
@@ -27,11 +57,11 @@ const GlobalHeader: React.FC = () => {
   };
 
   const navItems = [
-    { path: '/overview', icon: LayoutGrid, label: 'Overview', permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
-    { path: '/projects', icon: FolderOpen, label: 'Projects', permissions: [] },
-    { path: '/templates', icon: FileText, label: 'Templates', permissions: [PERMISSIONS.TEST_PLAN.READ] },
-    { path: '/settings', icon: Settings, label: 'Settings', permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
-    { path: '/documentation', icon: BookOpen, label: 'Documentation', permissions: [] },
+    { path: '/overview',       icon: LayoutGrid, label: 'Overview',      permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
+    { path: '/projects',       icon: FolderOpen, label: 'Projects',      permissions: [] },
+    { path: '/templates',      icon: FileText,   label: 'Templates',     permissions: [PERMISSIONS.TEST_PLAN.READ] },
+    { path: '/settings',       icon: Settings,   label: 'Settings',      permissions: [PERMISSIONS.ADMIN_PANEL.READ] },
+    { path: '/documentation',  icon: BookOpen,   label: 'Documentation', permissions: [] },
   ];
 
   const visibleNavItems = navItems.filter(
@@ -56,23 +86,27 @@ const GlobalHeader: React.FC = () => {
         </Link>
 
         {/* Center: Navigation */}
-        <nav className="flex items-center space-x-1">
-          {visibleNavItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? 'bg-purple-200/60 dark:bg-white/15 text-purple-900 dark:text-white border border-purple-300/50 dark:border-white/10 shadow-sm'
-                    : 'text-slate-600 dark:text-purple-200 hover:text-purple-900 dark:hover:text-white hover:bg-purple-100/50 dark:hover:bg-white/10'
-                }`
-              }
-            >
-              <item.icon className="w-4 h-4" />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+        <nav className="flex items-center h-full">
+          {visibleNavItems.map((item) => {
+            const active = activeRoot === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`relative flex items-center gap-2 px-4 h-14 text-sm font-medium transition-colors duration-150 ${
+                  active
+                    ? 'text-white dark:text-white'
+                    : 'text-slate-600 dark:text-purple-200 hover:text-purple-900 dark:hover:text-white'
+                }`}
+              >
+                <item.icon className="w-4 h-4 shrink-0" />
+                <span>{item.label}</span>
+                {active && (
+                  <span className="absolute bottom-0 inset-x-0 h-0.5 rounded-t-full bg-white/90" />
+                )}
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Right: Actions */}

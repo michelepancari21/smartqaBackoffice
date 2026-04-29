@@ -23,11 +23,6 @@ function isValidUrl(value: string): boolean {
   }
 }
 
-function toProjectType(value: string | undefined): ProjectType | '' {
-  if (!value) return '';
-  return (PROJECT_TYPES as readonly string[]).includes(value) ? (value as ProjectType) : '';
-}
-
 export interface EditProjectFormData {
   name: string;
   country: string;
@@ -42,6 +37,12 @@ interface Props {
   project: Project | null;
   onClose: () => void;
   onSubmit: (data: EditProjectFormData) => Promise<void>;
+}
+
+function toProjectType(value: string | undefined): ProjectType | '' {
+  if (!value) return '';
+  if ((PROJECT_TYPES as readonly string[]).includes(value)) return value as ProjectType;
+  return '';
 }
 
 const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit }) => {
@@ -115,18 +116,21 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
   };
 
   const isFormValid =
-    !!form.name.trim() &&
-    !!form.country &&
-    !!form.type &&
-    !!form.category &&
-    (!urlRequired || !!form.url.trim()) &&
+    form.name.trim() &&
+    form.country &&
+    form.type &&
+    form.category &&
+    (!urlRequired || form.url.trim()) &&
     (!form.url.trim() || isValidUrl(form.url.trim()));
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={!submitting ? onClose : undefined} />
+
+      {/* Modal */}
       <div className="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
@@ -142,6 +146,8 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+
+          {/* Project Name */}
           <Field label="Project name" required error={errors.name}>
             <input
               type="text"
@@ -154,6 +160,7 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
             />
           </Field>
 
+          {/* Country */}
           <Field label="Country" required error={errors.country}>
             <div className="relative">
               <button
@@ -164,7 +171,7 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
               >
                 <span className={selectedCountry ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}>
                   {selectedCountry
-                    ? `${selectedCountry.code !== 'WW' ? selectedCountry.code + ' \u2013 ' : ''}${selectedCountry.name}`
+                    ? `${selectedCountry.code !== 'WW' ? selectedCountry.code + ' – ' : ''}${selectedCountry.name}`
                     : 'Select a country'}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${countryOpen ? 'rotate-180' : ''}`} />
@@ -196,9 +203,7 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
                               : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
                           }`}
                         >
-                          {c.code === 'WW'
-                            ? <Globe className="w-3.5 h-3.5 shrink-0" />
-                            : <span className="w-7 text-xs font-mono text-slate-400 dark:text-slate-500 shrink-0">{c.code}</span>}
+                          {c.code === 'WW' ? <Globe className="w-3.5 h-3.5 shrink-0" /> : <span className="w-3.5 text-xs font-mono text-slate-400 dark:text-slate-500">{c.code}</span>}
                           {c.name}
                         </button>
                       </li>
@@ -209,8 +214,9 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
             </div>
           </Field>
 
+          {/* Type */}
           <Field label="Type" required error={errors.type}>
-            <div className="flex gap-5">
+            <div className="flex gap-4">
               {PROJECT_TYPES.map(t => (
                 <label key={t} className="flex items-center gap-1.5 cursor-pointer select-none">
                   <input
@@ -228,8 +234,9 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
             </div>
           </Field>
 
+          {/* Website URL */}
           {showUrlField && (
-            <Field label={urlRequired ? 'Website URL' : 'Website URL (optional)'} required={urlRequired} error={errors.url}>
+            <Field label={`Website URL${urlRequired ? '' : ' (optional)'}`} required={urlRequired} error={errors.url}>
               <input
                 type="text"
                 value={form.url}
@@ -241,6 +248,7 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
             </Field>
           )}
 
+          {/* Category */}
           <Field label="Category" required error={errors.category}>
             <select
               value={form.category}
@@ -249,10 +257,13 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
               className={inputCls(!!errors.category)}
             >
               <option value="">Select a label</option>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {CATEGORIES.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
           </Field>
 
+          {/* Description */}
           <Field label="Description" error={errors.description}>
             <textarea
               value={form.description}
@@ -282,7 +293,7 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
             className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-all flex items-center gap-2 shadow-md shadow-cyan-500/20"
           >
             {submitting && <Loader className="w-4 h-4 animate-spin" />}
-            {submitting ? 'Saving\u2026' : 'Save'}
+            {submitting ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
@@ -292,15 +303,21 @@ const EditProjectModal: React.FC<Props> = ({ isOpen, project, onClose, onSubmit 
 
 const inputCls = (hasError: boolean) =>
   `w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-700 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-colors ${
-    hasError ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+    hasError
+      ? 'border-red-400 dark:border-red-500'
+      : 'border-slate-300 dark:border-slate-600'
   }`;
 
-const Field: React.FC<{ label: string; required?: boolean; error?: string; children: React.ReactNode }> = ({
-  label, required, error, children,
-}) => (
+const Field: React.FC<{
+  label: string;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}> = ({ label, required, error, children }) => (
   <div>
     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-      {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      {label}
+      {required && <span className="text-red-500 ml-0.5">*</span>}
     </label>
     {children}
     {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
