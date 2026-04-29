@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Columns3, Check } from 'lucide-react';
-import Button from './Button';
 
 export interface ColumnVisibility {
   id: boolean;
@@ -93,14 +92,13 @@ const ColumnVisibilityDropdown: React.FC<ColumnVisibilityDropdownProps> = ({
   return (
     <div className="relative" ref={dropdownRef}>
       <div ref={buttonRef}>
-        <Button
-          variant="secondary"
-          icon={Columns3}
+        <button
           onClick={handleToggle}
-          className="px-4 py-2"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
         >
+          <Columns3 className="w-4 h-4" />
           View
-        </Button>
+        </button>
       </div>
 
       {isOpen && createPortal(

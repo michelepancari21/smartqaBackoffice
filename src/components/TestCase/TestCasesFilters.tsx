@@ -68,10 +68,10 @@ const TestCasesFilters: React.FC<TestCasesFiltersProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Search + View + Filters row */}
-      <div className="flex items-center gap-3">
-        {/* Search */}
-        <div className="relative flex-1">
+      {/* Search + View + Filters | spacer | Create row */}
+      <div className="flex items-center gap-2">
+        {/* Search — fixed width matching screenshot */}
+        <div className="relative w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-400 w-4 h-4 pointer-events-none" />
           <input
             type="text"
@@ -79,7 +79,7 @@ const TestCasesFilters: React.FC<TestCasesFiltersProps> = ({
             value={searchTerm}
             onChange={(e) => onSearchTermChange(e.target.value)}
             onKeyPress={onSearchKeyPress}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400 focus:border-transparent transition-shadow"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400 focus:border-transparent transition-shadow"
           />
         </div>
 
@@ -94,8 +94,8 @@ const TestCasesFilters: React.FC<TestCasesFiltersProps> = ({
           onClick={onOpenFiltersSidebar}
           className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
             activeFilterCount > 0
-              ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-700 dark:text-cyan-400'
-              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+              ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-600 dark:text-cyan-400'
+              : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700'
           }`}
         >
           <SlidersHorizontal className="w-4 h-4" />
@@ -107,12 +107,15 @@ const TestCasesFilters: React.FC<TestCasesFiltersProps> = ({
           )}
         </button>
 
-        {/* Create test case button */}
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Create test case button — far right */}
         {onCreateTestCase && (
           <PermissionGuard permission={PERMISSIONS.TEST_CASE.CREATE}>
             <button
               onClick={onCreateTestCase}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white transition-colors shrink-0"
+              className="flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg bg-cyan-500 hover:bg-cyan-400 text-white transition-colors shrink-0 shadow-sm"
             >
               <Plus className="w-4 h-4" />
               Create new test case
