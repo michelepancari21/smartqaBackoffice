@@ -17,8 +17,6 @@ export interface Project {
   gitlab_project_name?: string;
   /** Automation: test suite name (e.g. TplayvodSuite.robot) */
   test_suite_name?: string;
-  category?: string;
-  project_type?: string;
 }
 
 export interface TestCase {

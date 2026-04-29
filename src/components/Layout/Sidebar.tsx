@@ -11,8 +11,7 @@ import {
   ChevronDown,
   Loader,
   Search,
-  X,
-  FolderOpen
+  X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -20,11 +19,6 @@ import { projectsApiService } from '../../services/projectsApi';
 import { usePermissions } from '../../hooks/usePermissions';
 import { PERMISSIONS } from '../../utils/permissions';
 import { Project } from '../../types';
-
-const TEMPLATE_NAV_ITEMS = [
-  { path: '/test-cases',    icon: TestTube, label: 'Test Cases' },
-  { path: '/shared-steps',  icon: Layers,   label: 'Shared Steps' },
-];
 
 const Sidebar: React.FC = () => {
   const { state, dispatch, getSelectedProject, loadProjects } = useApp();
@@ -328,73 +322,6 @@ const Sidebar: React.FC = () => {
     initializeDropdown();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDropdownOpen, searchTerm]);
-
-  // Clear template mode when navigating to non-template pages via top nav
-  useEffect(() => {
-    const templateAllowedPaths = ['/test-cases', '/shared-steps'];
-    if (state.isTemplateMode && !templateAllowedPaths.includes(location.pathname)) {
-      dispatch({ type: 'SET_TEMPLATE_MODE', payload: false });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, state.isTemplateMode]);
-
-  // ---- Template mode sidebar ----
-  if (state.isTemplateMode) {
-    const selectedTemplate = getSelectedProject();
-    return (
-      <aside className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 shadow-2xl min-h-[calc(100vh-3.5rem)] sticky top-14">
-        <nav className="p-4 space-y-2">
-          {/* Templates label + name */}
-          <div className="mb-4">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-gray-500 mb-2 px-1">
-              Templates
-            </label>
-            <button
-              onClick={() => {
-                dispatch({ type: 'SET_TEMPLATE_MODE', payload: false });
-                dispatch({ type: 'SET_SELECTED_PROJECT_ID', payload: null });
-                navigate('/templates');
-              }}
-              className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-800/50 border border-cyan-500/50 dark:border-cyan-500/50 rounded-lg text-slate-900 dark:text-white text-left flex items-center justify-between hover:bg-slate-200 dark:hover:bg-slate-700/50 transition-colors"
-            >
-              <span className="flex items-center gap-2 truncate">
-                <FolderOpen className="w-4 h-4 text-cyan-500 shrink-0" />
-                <span className="text-sm text-slate-900 dark:text-white truncate">
-                  {selectedTemplate?.name ?? 'Template'}
-                </span>
-              </span>
-              <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-            </button>
-          </div>
-
-          {/* Only Test Cases + Shared Steps */}
-          {TEMPLATE_NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={(e) => {
-                if (location.pathname === item.path) {
-                  e.preventDefault();
-                  navigate(item.path, { replace: false, state: { timestamp: Date.now() } });
-                }
-              }}
-              className={({ isActive }) =>
-                `flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group ${
-                  isActive
-                    ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 shadow-lg'
-                    : 'text-slate-600 dark:text-gray-300 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-                }`
-              }
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="font-medium">{item.label}</span>
-              <div className="ml-auto w-2 h-2 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            </NavLink>
-          ))}
-        </nav>
-      </aside>
-    );
-  }
 
   return (
     <aside className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 shadow-2xl min-h-[calc(100vh-3.5rem)] sticky top-14">
