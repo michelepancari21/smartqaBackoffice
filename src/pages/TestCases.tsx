@@ -971,7 +971,7 @@ const TestCases: React.FC = () => {
       {/* Only show content if project is selected */}
       {selectedProject && (
         <div className="space-y-4">
-          {/* Search + View + Filters bar — full width above the two-column layout */}
+          {/* Search + View + Filters + Create bar — full width above the two-column layout */}
           <TestCasesFilters
             searchTerm={searchTerm}
             onSearchTermChange={setSearchTerm}
@@ -987,6 +987,7 @@ const TestCases: React.FC = () => {
             onCreateTag={handleCreateTag}
             visibleColumns={visibleColumns}
             onToggleColumn={handleToggleColumn}
+            onCreateTestCase={() => setIsCreateModalOpen(true)}
           />
 
           <div className="flex gap-4">

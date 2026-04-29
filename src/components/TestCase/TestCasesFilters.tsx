@@ -1,6 +1,8 @@
 import React from 'react';
-import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Plus } from 'lucide-react';
 import ColumnVisibilityDropdown, { ColumnVisibility } from '../UI/ColumnVisibilityDropdown';
+import PermissionGuard from '../PermissionGuard';
+import { PERMISSIONS } from '../../utils/permissions';
 import { AUTOMATION_STATUS_LABELS } from '../../types';
 import { Tag } from '../../services/tagsApi';
 
@@ -27,6 +29,7 @@ interface TestCasesFiltersProps {
   onClearIndividualFilter: (filterType: keyof FiltersState, value?: string) => void;
   visibleColumns: ColumnVisibility;
   onToggleColumn: (column: keyof ColumnVisibility) => void;
+  onCreateTestCase?: () => void;
 }
 
 const TestCasesFilters: React.FC<TestCasesFiltersProps> = ({
@@ -39,7 +42,8 @@ const TestCasesFilters: React.FC<TestCasesFiltersProps> = ({
   onOpenFiltersSidebar,
   onClearIndividualFilter,
   visibleColumns,
-  onToggleColumn
+  onToggleColumn,
+  onCreateTestCase
 }) => {
   const activeFilterCount = [
     filters.automationStatus !== 'all' ? 1 : 0,
@@ -102,6 +106,19 @@ const TestCasesFilters: React.FC<TestCasesFiltersProps> = ({
             </span>
           )}
         </button>
+
+        {/* Create test case button */}
+        {onCreateTestCase && (
+          <PermissionGuard permission={PERMISSIONS.TEST_CASE.CREATE}>
+            <button
+              onClick={onCreateTestCase}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white transition-colors shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              Create new test case
+            </button>
+          </PermissionGuard>
+        )}
       </div>
 
       {/* Active filter chips */}
