@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SquarePen, MoreVertical, Copy, Trash2 } from 'lucide-react';
+import { SquarePen, MoreVertical, Copy, Trash2, Globe } from 'lucide-react';
 import { Project } from '../../types';
 
 interface ProjectCardProps {
@@ -16,20 +16,6 @@ interface ProjectCardProps {
   disabled: boolean;
 }
 
-function getCategoryFromName(name: string): { label: string; color: string } | null {
-  const lower = name.toLowerCase();
-  if (lower.includes('vod') || lower.includes('playvod') || lower.includes('playcin'))
-    return { label: 'VOD', color: 'bg-orange-500' };
-  if (lower.includes('music') || lower.includes('playup'))
-    return { label: 'Music', color: 'bg-cyan-500' };
-  if (lower.includes('product') || lower.includes('masterch'))
-    return { label: 'WL Product', color: 'bg-green-500' };
-  if (lower.includes('sport'))
-    return { label: 'Sport', color: 'bg-red-500' };
-  if (lower.includes('news'))
-    return { label: 'News', color: 'bg-blue-500' };
-  return null;
-}
 
 const CardActionMenu: React.FC<{
   onDuplicate: () => void;
@@ -88,6 +74,18 @@ const CardActionMenu: React.FC<{
   );
 };
 
+const CATEGORY_COLORS: Record<string, string> = {
+  'Ticketing': 'bg-blue-500',
+  'VOD': 'bg-orange-500',
+  'Games': 'bg-green-500',
+  'Sports': 'bg-red-500',
+  'WL Product': 'bg-teal-500',
+  'Music': 'bg-cyan-500',
+  'Lifestyle': 'bg-pink-500',
+  'Loyalty': 'bg-amber-500',
+  'Campaign': 'bg-indigo-400',
+};
+
 const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
   onClick,
@@ -101,7 +99,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   canDelete,
   disabled
 }) => {
-  const category = getCategoryFromName(project.name);
+  const categoryLabel = project.category || null;
+  const categoryColor = categoryLabel ? (CATEGORY_COLORS[categoryLabel] ?? 'bg-slate-500') : 'bg-slate-500';
 
   return (
     <div
@@ -110,15 +109,9 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     >
       {/* Top section: badge + actions */}
       <div className="flex items-start justify-between px-5 pt-5 pb-0">
-        {category ? (
-          <span className={`inline-block px-3 py-1 text-xs font-semibold text-white rounded-md ${category.color}`}>
-            {category.label}
-          </span>
-        ) : (
-          <span className="inline-block px-3 py-1 text-xs font-semibold text-white rounded-md bg-slate-500">
-            Project
-          </span>
-        )}
+        <span className={`inline-block px-3 py-1 text-xs font-semibold text-white rounded-md ${categoryColor}`}>
+          {categoryLabel ?? 'Project'}
+        </span>
 
         <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
           {canEdit && (
@@ -142,13 +135,33 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       </div>
 
       {/* Content */}
-      <div className="flex-1 px-5 pt-4 pb-4">
+      <div className="flex-1 px-5 pt-3 pb-4">
+        {/* Country */}
+        {project.country && (
+          <div className="flex items-center gap-1 mb-1.5">
+            {project.country === 'WW' ? (
+              <Globe className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
+            ) : (
+              <span className="text-xs font-mono font-semibold text-slate-400 dark:text-slate-500 uppercase">{project.country}</span>
+            )}
+            {project.country === 'WW' && (
+              <span className="text-xs text-slate-400 dark:text-slate-500">WW</span>
+            )}
+          </div>
+        )}
         <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors leading-tight">
           {project.name}
         </h3>
-        <p className="text-sm text-slate-500 dark:text-gray-400 mt-1.5 line-clamp-2 leading-relaxed">
-          {project.description}
-        </p>
+        {project.project_type && (
+          <span className="inline-block mt-1.5 px-2 py-0.5 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 rounded-md border border-slate-200 dark:border-slate-600/50">
+            {project.project_type}
+          </span>
+        )}
+        {project.description && (
+          <p className="text-sm text-slate-500 dark:text-gray-400 mt-2 line-clamp-2 leading-relaxed">
+            {project.description}
+          </p>
+        )}
       </div>
 
       {/* Footer: test cases + test runs */}
