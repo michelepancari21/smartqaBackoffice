@@ -99,7 +99,7 @@ const ColumnVisibilityDropdown: React.FC<ColumnVisibilityDropdownProps> = ({
           onClick={handleToggle}
           className="px-4 py-2"
         >
-          Columns
+          View
         </Button>
       </div>
 

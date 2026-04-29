@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronRight } from 'lucide-react';
 import Button from '../UI/Button';
 import { Project } from '../../types';
 import PermissionGuard from '../PermissionGuard';
@@ -15,44 +15,66 @@ interface TestCasesHeaderProps {
 
 const TestCasesHeader: React.FC<TestCasesHeaderProps> = ({
   selectedProject,
-  totalItems,
   selectedFolder,
   onCreateTestCase,
   disabled
 }) => {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Test Cases</h2>
-        <p className="text-slate-600 dark:text-gray-400">
-          {selectedProject 
-            ? `Manage test cases for ${selectedProject.name} (${totalItems} total)` 
-            : `Please select a project to view test cases`
-          }
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {selectedProject && (
-            <div className="inline-flex items-center px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 rounded-full text-sm text-cyan-700 dark:text-cyan-400">
-              📁 Project: {selectedProject.name}
-            </div>
+    <div className="space-y-3">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-gray-400">
+        <span className="hover:text-slate-700 dark:hover:text-gray-200 cursor-pointer transition-colors">Projects</span>
+        {selectedProject && (
+          <>
+            <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="hover:text-slate-700 dark:hover:text-gray-200 cursor-pointer transition-colors">
+              {selectedProject.name}
+            </span>
+          </>
+        )}
+        {selectedFolder && (
+          <>
+            <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="hover:text-slate-700 dark:hover:text-gray-200 cursor-pointer transition-colors">
+              {selectedFolder.name}
+            </span>
+          </>
+        )}
+        <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
+        <span className="text-cyan-600 dark:text-cyan-400 font-medium">Test Cases</span>
+      </div>
+
+      {/* Title row */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">
+            {selectedProject
+              ? selectedProject.name
+              : 'Test Cases'}
+          </h1>
+          {selectedProject?.description && (
+            <p className="mt-1 text-sm text-slate-500 dark:text-gray-400 max-w-2xl line-clamp-2">
+              {selectedProject.description}
+            </p>
           )}
-          {selectedFolder && (
-            <div className="inline-flex items-center px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-sm text-purple-400">
-              📂 Folder: {selectedFolder.name}
-            </div>
+          {!selectedProject && (
+            <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">
+              Please select a project to view test cases
+            </p>
           )}
         </div>
+        <PermissionGuard permission={PERMISSIONS.TEST_CASE.CREATE}>
+          <Button
+            icon={Plus}
+            onClick={onCreateTestCase}
+            disabled={disabled}
+            title={!selectedProject ? 'Please select a project first' : 'Create new test case'}
+            className="shrink-0"
+          >
+            Create new test case
+          </Button>
+        </PermissionGuard>
       </div>
-      <PermissionGuard permission={PERMISSIONS.TEST_CASE.CREATE}>
-        <Button
-          icon={Plus}
-          onClick={onCreateTestCase}
-          disabled={disabled}
-          title={!selectedProject ? 'Please select a project first' : 'Create new test case'}
-        >
-          New Test Case
-        </Button>
-      </PermissionGuard>
     </div>
   );
 };
