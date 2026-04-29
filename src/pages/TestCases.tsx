@@ -970,39 +970,41 @@ const TestCases: React.FC = () => {
 
       {/* Only show content if project is selected */}
       {selectedProject && (
-        <div className="flex gap-4">
-          <TestCasesFolderSidebar
-            folderTree={folderTree}
-            selectedFolderId={selectedFolderId}
-            onSelectFolder={selectFolder}
-            foldersLoading={foldersLoading}
-            onCreateFolder={handleCreateFolder}
-            onEditFolder={openEditFolderModal}
-            onDeleteFolder={openDeleteFolderDialog}
-            onTestCaseDropped={handleTestCaseDropped}
+        <div className="space-y-4">
+          {/* Search + View + Filters bar — full width above the two-column layout */}
+          <TestCasesFilters
+            searchTerm={searchTerm}
+            onSearchTermChange={setSearchTerm}
+            onSearchKeyPress={handleSearchKeyPress}
+            currentSearchTerm={currentSearchTerm}
+            filters={filters}
+            onFilterChange={updateFilter}
+            onApplyFilters={applyFilters}
+            onClearAllFilters={clearAllFilters}
             onClearIndividualFilter={clearIndividualFilter}
+            onOpenFiltersSidebar={() => setIsFiltersSidebarOpen(true)}
+            availableTags={tags}
+            onCreateTag={handleCreateTag}
+            visibleColumns={visibleColumns}
+            onToggleColumn={handleToggleColumn}
           />
 
-          {/* Main Content */}
-          <div className="flex-1 space-y-4">
-            <TestCasesFilters
-              searchTerm={searchTerm}
-              onSearchTermChange={setSearchTerm}
-              onSearchKeyPress={handleSearchKeyPress}
-              currentSearchTerm={currentSearchTerm}
-              filters={filters}
-              onFilterChange={updateFilter}
-              onApplyFilters={applyFilters}
-              onClearAllFilters={clearAllFilters}
+          <div className="flex gap-4">
+            <TestCasesFolderSidebar
+              folderTree={folderTree}
+              selectedFolderId={selectedFolderId}
+              onSelectFolder={selectFolder}
+              foldersLoading={foldersLoading}
+              onCreateFolder={handleCreateFolder}
+              onEditFolder={openEditFolderModal}
+              onDeleteFolder={openDeleteFolderDialog}
+              onTestCaseDropped={handleTestCaseDropped}
               onClearIndividualFilter={clearIndividualFilter}
-              onOpenFiltersSidebar={() => setIsFiltersSidebarOpen(true)}
-              availableTags={tags}
-              onCreateTag={handleCreateTag}
-              visibleColumns={visibleColumns}
-              onToggleColumn={handleToggleColumn}
             />
 
-            <TestCasesTable
+            {/* Main Content */}
+            <div className="flex-1">
+              <TestCasesTable
               testCases={testCases}
               loading={loading}
               isApplyingNavigationFilter={isApplyingNavigationFilter}
@@ -1022,6 +1024,7 @@ const TestCases: React.FC = () => {
               visibleColumns={visibleColumns}
               folderMap={folderMap}
             />
+            </div>
           </div>
         </div>
       )}

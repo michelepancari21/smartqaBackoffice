@@ -1,6 +1,5 @@
 import React from 'react';
-import { FolderPlus, Folder as FolderIcon } from 'lucide-react';
-import Button from '../UI/Button';
+import { Plus } from 'lucide-react';
 import DroppableFolderTree from '../FolderTree/DroppableFolderTree';
 import { Folder } from '../../services/foldersApi';
 
@@ -26,45 +25,24 @@ const TestCasesFolderSidebar: React.FC<TestCasesFolderSidebarProps> = ({
   onDeleteFolder,
   onTestCaseDropped
 }) => {
-  const totalCount = folderTree.reduce((acc, f) => acc + (f.testCasesCount || 0), 0);
-
   return (
     <div className="w-64 flex-shrink-0">
       <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl h-fit">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center gap-2">
-            <FolderIcon className="w-4 h-4 text-slate-500 dark:text-gray-400" />
-            <span className="text-sm font-semibold text-slate-900 dark:text-white">Folders</span>
+            <svg className="w-5 h-5 text-slate-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <path d="M3 11h18" />
+            </svg>
+            <span className="text-sm font-bold text-slate-900 dark:text-white">Folders</span>
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            icon={FolderPlus}
-            onClick={onCreateFolder}
-            className="p-1.5 h-7 w-7 flex items-center justify-center"
-            title="Create new folder"
-          />
-        </div>
-
-        {/* All test cases option */}
-        <div className="px-3 pt-2">
           <button
-            onClick={() => onSelectFolder(null)}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
-              selectedFolderId === null
-                ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 font-medium'
-                : 'text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'
-            }`}
+            onClick={onCreateFolder}
+            className="w-7 h-7 flex items-center justify-center text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            title="Create new folder"
           >
-            <span>All test cases</span>
-            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
-              selectedFolderId === null
-                ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400'
-                : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-gray-400'
-            }`}>
-              {totalCount}
-            </span>
+            <Plus className="w-4 h-4" />
           </button>
         </div>
 
@@ -73,13 +51,7 @@ const TestCasesFolderSidebar: React.FC<TestCasesFolderSidebarProps> = ({
           <DroppableFolderTree
             folders={folderTree}
             selectedFolderId={selectedFolderId}
-            onSelectFolder={(folderId) => {
-              if (folderId === null) {
-                onSelectFolder(null);
-              } else {
-                onSelectFolder(folderId);
-              }
-            }}
+            onSelectFolder={(folderId) => onSelectFolder(folderId)}
             loading={foldersLoading}
             onEditFolder={onEditFolder}
             onDeleteFolder={onDeleteFolder}

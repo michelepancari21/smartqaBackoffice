@@ -67,7 +67,7 @@ const TestCasesFilters: React.FC<TestCasesFiltersProps> = ({
       {/* Search + View + Filters row */}
       <div className="flex items-center gap-3">
         {/* Search */}
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-400 w-4 h-4 pointer-events-none" />
           <input
             type="text"
