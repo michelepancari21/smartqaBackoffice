@@ -970,7 +970,7 @@ const TestCases: React.FC = () => {
 
       {/* Only show content if project is selected */}
       {selectedProject && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* Search + View + Filters + Create bar — full width above the two-column layout */}
           <TestCasesFilters
             searchTerm={searchTerm}

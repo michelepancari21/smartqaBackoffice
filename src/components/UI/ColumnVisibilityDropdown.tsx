@@ -68,14 +68,12 @@ const ColumnVisibilityDropdown: React.FC<ColumnVisibilityDropdownProps> = ({
     };
   }, [isOpen]);
 
-  const activeCount = TOGGLEABLE_COLUMNS.filter(c => visibleColumns[c.key]).length;
-
   return (
     <>
       <button
         ref={buttonRef}
         onClick={() => setIsOpen(o => !o)}
-        className={`relative flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+        className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
           isOpen
             ? 'bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white'
             : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700'
@@ -83,11 +81,6 @@ const ColumnVisibilityDropdown: React.FC<ColumnVisibilityDropdownProps> = ({
       >
         <Columns3 className="w-4 h-4" />
         <span>View</span>
-        {activeCount > 0 && (
-          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-cyan-500 text-white text-xs font-bold leading-none">
-            {activeCount}
-          </span>
-        )}
       </button>
 
       {isOpen && createPortal(
