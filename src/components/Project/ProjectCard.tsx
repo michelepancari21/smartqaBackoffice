@@ -107,12 +107,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       onClick={onClick}
       className="group relative flex flex-col bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800/80 dark:to-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden cursor-pointer hover:border-cyan-500/40 dark:hover:border-cyan-500/30 hover:shadow-lg hover:shadow-cyan-500/5 transition-all duration-200"
     >
-      {/* Top section: badge + actions */}
-      <div className="flex items-start justify-between px-5 pt-5 pb-0">
-        <span className={`inline-block px-3 py-1 text-xs font-semibold text-white rounded-md ${categoryColor}`}>
-          {categoryLabel ?? 'Project'}
-        </span>
-
+      {/* Top section: actions only */}
+      <div className="flex items-center justify-end px-5 pt-4 pb-0">
         <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
           {canEdit && (
             <button
@@ -135,28 +131,47 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       </div>
 
       {/* Content */}
-      <div className="flex-1 px-5 pt-3 pb-4">
-        {/* Country */}
-        {project.country && (
-          <div className="flex items-center gap-1 mb-1.5">
-            {project.country === 'WW' ? (
-              <Globe className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
-            ) : (
-              <span className="text-xs font-mono font-semibold text-slate-400 dark:text-slate-500 uppercase">{project.country}</span>
-            )}
-            {project.country === 'WW' && (
-              <span className="text-xs text-slate-400 dark:text-slate-500">WW</span>
-            )}
-          </div>
-        )}
-        <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors leading-tight">
-          {project.name}
-        </h3>
-        {project.project_type && (
-          <span className="inline-block mt-1.5 px-2 py-0.5 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 rounded-md border border-slate-200 dark:border-slate-600/50">
-            {project.project_type}
-          </span>
-        )}
+      <div className="flex-1 px-5 pt-2 pb-4">
+        {/* Title line: [Category] · Country · Project Name · Type */}
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
+          {/* Category colored tag */}
+          {categoryLabel && (
+            <span className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold text-white rounded-md shrink-0 ${categoryColor}`}>
+              {categoryLabel}
+            </span>
+          )}
+
+          {/* Country */}
+          {project.country && (
+            <>
+              {categoryLabel && <span className="text-slate-300 dark:text-slate-600 text-xs shrink-0">·</span>}
+              <span className="flex items-center gap-0.5 text-xs font-mono font-semibold text-slate-400 dark:text-slate-500 uppercase shrink-0">
+                {project.country === 'WW' ? (
+                  <><Globe className="w-3 h-3" /> WW</>
+                ) : project.country}
+              </span>
+            </>
+          )}
+
+          {/* Project name */}
+          {(categoryLabel || project.country) && (
+            <span className="text-slate-300 dark:text-slate-600 text-xs shrink-0">·</span>
+          )}
+          <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors leading-tight">
+            {project.name}
+          </h3>
+
+          {/* Type */}
+          {project.project_type && (
+            <>
+              <span className="text-slate-300 dark:text-slate-600 text-xs shrink-0">·</span>
+              <span className="text-xs font-medium text-slate-400 dark:text-slate-500 shrink-0">
+                {project.project_type}
+              </span>
+            </>
+          )}
+        </div>
+
         {project.description && (
           <p className="text-sm text-slate-500 dark:text-gray-400 mt-2 line-clamp-2 leading-relaxed">
             {project.description}
