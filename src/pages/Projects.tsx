@@ -454,14 +454,22 @@ const Projects: React.FC = () => {
           project_type: data.type || undefined,
         });
       }
-      await loadProjects(true);
+      // Reload the page list and the sidebar
+      const sortOption = SORT_OPTIONS.find(o => o.value === sortBy);
+      if (filterMode === 'my-projects') {
+        await fetchProjectsCreatedByUser(authState.user?.id?.toString() || '', 1, sortOption?.param);
+      } else {
+        await fetchProjectsWithSort(1, sortOption?.param);
+      }
+      loadProjects();
       setIsCreateModalOpen(false);
-    } catch {
-      // Error handled in hook
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to create project';
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
-  }, [createProject, authState.user?.id, loadProjects]);
+  }, [createProject, authState.user?.id, loadProjects, filterMode, sortBy, SORT_OPTIONS, fetchProjectsCreatedByUser, fetchProjectsWithSort]);
 
   const handleEditProject = useCallback(async (data: EditProjectFormData) => {
     if (!projectToManage) return;
