@@ -50,7 +50,7 @@ const TableHeader: React.FC<{ visibleColumns: ColumnVisibility; hasAnyAction: bo
   <>
     <colgroup>
       {visibleColumns.id        && <col style={{ width: '72px' }} />}
-      {visibleColumns.title     && <col />}
+      {visibleColumns.title     && <col style={{ width: '260px' }} />}
       {visibleColumns.type      && <col style={{ width: '130px' }} />}
       {visibleColumns.state     && <col style={{ width: '110px' }} />}
       {visibleColumns.priority  && <col style={{ width: '100px' }} />}
@@ -111,11 +111,10 @@ const FolderSectionBlock: React.FC<FolderSectionBlockProps> = ({
 
   return (
     <div className="mb-4">
-      {/* Folder heading — text only, aligned to table left edge */}
+      {/* Folder heading */}
       <div className="px-1 mb-2">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-gray-200">
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-white">
           {section.folderName}
-          <span className="ml-1.5 text-xs font-normal text-slate-400 dark:text-gray-500">({total})</span>
         </h3>
       </div>
 
