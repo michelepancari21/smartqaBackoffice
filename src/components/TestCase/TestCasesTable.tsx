@@ -41,24 +41,44 @@ interface FolderSection {
   testCases: TestCase[];
 }
 
-const colCount = (visibleColumns: ColumnVisibility, hasAnyAction: boolean) => {
-  let n = 0;
-  if (visibleColumns.id) n++;
-  if (visibleColumns.title) n++;
-  if (visibleColumns.type) n++;
-  if (visibleColumns.state) n++;
-  if (visibleColumns.priority) n++;
-  if (visibleColumns.tags) n++;
-  if (visibleColumns.autoStatus) n++;
-  if (hasAnyAction) n++;
-  return n;
-};
+const TableHeader: React.FC<{ visibleColumns: ColumnVisibility; hasAnyAction: boolean }> = ({
+  visibleColumns,
+  hasAnyAction,
+}) => (
+  <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+    <tr>
+      {visibleColumns.id && (
+        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">ID</th>
+      )}
+      {visibleColumns.title && (
+        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide">Title</th>
+      )}
+      {visibleColumns.type && (
+        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Type</th>
+      )}
+      {visibleColumns.state && (
+        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">State</th>
+      )}
+      {visibleColumns.priority && (
+        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Priority</th>
+      )}
+      {visibleColumns.tags && (
+        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Tags</th>
+      )}
+      {visibleColumns.autoStatus && (
+        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Auto Status</th>
+      )}
+      {hasAnyAction && (
+        <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Actions</th>
+      )}
+    </tr>
+  </thead>
+);
 
-interface FolderSectionRowsProps {
+interface FolderSectionBlockProps {
   section: FolderSection;
   visibleColumns: ColumnVisibility;
   hasAnyAction: boolean;
-  totalCols: number;
   onTestCaseTitleClick: (tc: TestCase) => void;
   onEditTestCase: (tc: TestCase) => void;
   onPrefetchTestCase?: (tc: TestCase) => void;
@@ -71,11 +91,10 @@ interface FolderSectionRowsProps {
   folderMap: Record<string, string>;
 }
 
-const FolderSectionRows: React.FC<FolderSectionRowsProps> = ({
+const FolderSectionBlock: React.FC<FolderSectionBlockProps> = ({
   section,
   visibleColumns,
   hasAnyAction,
-  totalCols,
   onTestCaseTitleClick,
   onEditTestCase,
   onPrefetchTestCase,
@@ -93,48 +112,44 @@ const FolderSectionRows: React.FC<FolderSectionRowsProps> = ({
   const hidden = total - visible;
 
   return (
-    <>
-      {/* Folder heading row */}
-      <tr className="bg-slate-50 dark:bg-slate-800/60 border-t-2 border-slate-200 dark:border-slate-700">
-        <td
-          colSpan={totalCols}
-          className="py-2.5 px-4"
-        >
-          <div className="flex items-center gap-2">
-            <Folder className="w-3.5 h-3.5 text-slate-400 dark:text-gray-500 shrink-0" />
-            <span className="text-sm font-semibold text-slate-700 dark:text-gray-200 tracking-wide">
-              {section.folderName}
-            </span>
-            <span className="text-xs text-slate-400 dark:text-gray-500 font-normal ml-0.5">
-              ({total})
-            </span>
-          </div>
-        </td>
-      </tr>
+    <div className="mb-4">
+      {/* Folder heading — same horizontal padding as table cells */}
+      <div className="flex items-center gap-2 px-4 mb-2">
+        <Folder className="w-4 h-4 text-slate-400 dark:text-gray-500 shrink-0" />
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-gray-200">
+          {section.folderName}
+        </h3>
+        <span className="text-xs text-slate-400 dark:text-gray-500">({total})</span>
+      </div>
 
-      {/* Test case rows */}
-      {section.testCases.slice(0, visible).map((tc) => (
-        <DraggableTestCaseRow
-          key={tc.id}
-          testCase={tc}
-          onTestCaseTitleClick={onTestCaseTitleClick}
-          onEditTestCase={onEditTestCase}
-          onPrefetchTestCase={onPrefetchTestCase}
-          onDeleteTestCase={onDeleteTestCase}
-          onDuplicateTestCase={onDuplicateTestCase}
-          onRunTest={onRunTest}
-          isSubmitting={isSubmitting}
-          gitlabLinkName={gitlabLinksByTestCaseId[tc.id] ?? undefined}
-          showGitlabLinkIndicator={gitlabLinksFetched}
-          folderName={tc.folderId ? folderMap[tc.folderId] || 'Unknown' : 'No folder'}
-          visibleColumns={visibleColumns}
-        />
-      ))}
+      <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <TableHeader visibleColumns={visibleColumns} hasAnyAction={hasAnyAction} />
+            <tbody>
+              {section.testCases.slice(0, visible).map((tc) => (
+                <DraggableTestCaseRow
+                  key={tc.id}
+                  testCase={tc}
+                  onTestCaseTitleClick={onTestCaseTitleClick}
+                  onEditTestCase={onEditTestCase}
+                  onPrefetchTestCase={onPrefetchTestCase}
+                  onDeleteTestCase={onDeleteTestCase}
+                  onDuplicateTestCase={onDuplicateTestCase}
+                  onRunTest={onRunTest}
+                  isSubmitting={isSubmitting}
+                  gitlabLinkName={gitlabLinksByTestCaseId[tc.id] ?? undefined}
+                  showGitlabLinkIndicator={gitlabLinksFetched}
+                  folderName={tc.folderId ? folderMap[tc.folderId] || 'Unknown' : 'No folder'}
+                  visibleColumns={visibleColumns}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-      {/* Show more / hide row */}
-      {total > INITIAL_VISIBLE && (
-        <tr className="border-t border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-800/20">
-          <td colSpan={totalCols} className="py-2.5 px-4">
+        {total > INITIAL_VISIBLE && (
+          <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-2.5 flex justify-start">
             <button
               onClick={() => setShowAll(!showAll)}
               className="flex items-center gap-1.5 text-xs text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 font-medium transition-colors"
@@ -145,10 +160,10 @@ const FolderSectionRows: React.FC<FolderSectionRowsProps> = ({
                 <>Show {hidden} more <ChevronDown className="w-3.5 h-3.5" /></>
               )}
             </button>
-          </td>
-        </tr>
-      )}
-    </>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -170,16 +185,15 @@ const TestCasesTable: React.FC<TestCasesTableProps> = ({
   gitlabLinksByTestCaseId = {},
   gitlabLinksFetched = false,
   visibleColumns,
-  folderMap = {}
+  folderMap = {},
 }) => {
   const { hasPermission } = usePermissions();
 
-  const hasAnyAction = hasPermission(PERMISSIONS.TEST_CASE.UPDATE) ||
-                       hasPermission(PERMISSIONS.TEST_CASE.DELETE) ||
-                       hasPermission(PERMISSIONS.TEST_CASE.CREATE) ||
-                       hasPermission(PERMISSIONS.TEST_CASE_EXECUTION.CREATE);
-
-  const totalCols = colCount(visibleColumns, hasAnyAction);
+  const hasAnyAction =
+    hasPermission(PERMISSIONS.TEST_CASE.UPDATE) ||
+    hasPermission(PERMISSIONS.TEST_CASE.DELETE) ||
+    hasPermission(PERMISSIONS.TEST_CASE.CREATE) ||
+    hasPermission(PERMISSIONS.TEST_CASE_EXECUTION.CREATE);
 
   const sections = useMemo<FolderSection[]>(() => {
     if (testCases.length === 0) return [];
@@ -194,9 +208,7 @@ const TestCasesTable: React.FC<TestCasesTableProps> = ({
     const result: FolderSection[] = [];
     map.forEach((cases, key) => {
       const folderId = key === '__none__' ? null : key;
-      const folderName = folderId
-        ? (folderMap[folderId] || 'Unknown Folder')
-        : 'Unfolder';
+      const folderName = folderId ? folderMap[folderId] || 'Unknown Folder' : 'Unfolder';
       result.push({ folderId, folderName, testCases: cases });
     });
 
@@ -233,78 +245,36 @@ const TestCasesTable: React.FC<TestCasesTableProps> = ({
           <p className="text-sm text-slate-500 dark:text-gray-400">
             {currentSearchTerm
               ? `No test cases matching "${currentSearchTerm}"`
-              : `No test cases found${selectedFolder ? ` in ${selectedFolder.name}` : ''}`
-            }
+              : `No test cases found${selectedFolder ? ` in ${selectedFolder.name}` : ''}`}
           </p>
         </div>
       )}
 
-      {/* Single unified table — all folder sections share the same column widths */}
-      {sections.length > 0 && (
-        <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden mb-4">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              {/* Single shared header */}
-              <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                <tr>
-                  {visibleColumns.id && (
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">ID</th>
-                  )}
-                  {visibleColumns.title && (
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide">Title</th>
-                  )}
-                  {visibleColumns.type && (
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Type</th>
-                  )}
-                  {visibleColumns.state && (
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">State</th>
-                  )}
-                  {visibleColumns.priority && (
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Priority</th>
-                  )}
-                  {visibleColumns.tags && (
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Tags</th>
-                  )}
-                  {visibleColumns.autoStatus && (
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Auto Status</th>
-                  )}
-                  {hasAnyAction && (
-                    <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Actions</th>
-                  )}
-                </tr>
-              </thead>
-
-              <tbody>
-                {sections.map((section) => (
-                  <FolderSectionRows
-                    key={section.folderId ?? '__none__'}
-                    section={section}
-                    visibleColumns={visibleColumns}
-                    hasAnyAction={hasAnyAction}
-                    totalCols={totalCols}
-                    onTestCaseTitleClick={onTestCaseTitleClick}
-                    onEditTestCase={onEditTestCase}
-                    onPrefetchTestCase={onPrefetchTestCase}
-                    onDeleteTestCase={onDeleteTestCase}
-                    onDuplicateTestCase={onDuplicateTestCase}
-                    onRunTest={onRunTest}
-                    isSubmitting={isSubmitting}
-                    gitlabLinksByTestCaseId={gitlabLinksByTestCaseId}
-                    gitlabLinksFetched={gitlabLinksFetched}
-                    folderMap={folderMap}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* Folder section boxes */}
+      {sections.map((section) => (
+        <FolderSectionBlock
+          key={section.folderId ?? '__none__'}
+          section={section}
+          visibleColumns={visibleColumns}
+          hasAnyAction={hasAnyAction}
+          onTestCaseTitleClick={onTestCaseTitleClick}
+          onEditTestCase={onEditTestCase}
+          onPrefetchTestCase={onPrefetchTestCase}
+          onDeleteTestCase={onDeleteTestCase}
+          onDuplicateTestCase={onDuplicateTestCase}
+          onRunTest={onRunTest}
+          isSubmitting={isSubmitting}
+          gitlabLinksByTestCaseId={gitlabLinksByTestCaseId}
+          gitlabLinksFetched={gitlabLinksFetched}
+          folderMap={folderMap}
+        />
+      ))}
 
       {/* Pagination */}
       {pagination.totalPages > 1 && (
         <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl px-6 py-4 flex flex-col lg:flex-row items-center justify-between gap-4">
           <p className="text-sm text-slate-500 dark:text-gray-400">
-            Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1}–
+            Showing {(pagination.currentPage - 1) * pagination.itemsPerPage + 1}–
             {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of{' '}
             {pagination.totalItems} test cases
           </p>
