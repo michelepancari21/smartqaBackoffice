@@ -41,38 +41,36 @@ interface FolderSection {
   testCases: TestCase[];
 }
 
+const TH = 'text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap';
+
 const TableHeader: React.FC<{ visibleColumns: ColumnVisibility; hasAnyAction: boolean }> = ({
   visibleColumns,
   hasAnyAction,
 }) => (
-  <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-    <tr>
-      {visibleColumns.id && (
-        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">ID</th>
-      )}
-      {visibleColumns.title && (
-        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide">Title</th>
-      )}
-      {visibleColumns.type && (
-        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Type</th>
-      )}
-      {visibleColumns.state && (
-        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">State</th>
-      )}
-      {visibleColumns.priority && (
-        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Priority</th>
-      )}
-      {visibleColumns.tags && (
-        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Tags</th>
-      )}
-      {visibleColumns.autoStatus && (
-        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Auto Status</th>
-      )}
-      {hasAnyAction && (
-        <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Actions</th>
-      )}
-    </tr>
-  </thead>
+  <>
+    <colgroup>
+      {visibleColumns.id        && <col style={{ width: '72px' }} />}
+      {visibleColumns.title     && <col />}
+      {visibleColumns.type      && <col style={{ width: '130px' }} />}
+      {visibleColumns.state     && <col style={{ width: '110px' }} />}
+      {visibleColumns.priority  && <col style={{ width: '100px' }} />}
+      {visibleColumns.tags      && <col style={{ width: '140px' }} />}
+      {visibleColumns.autoStatus && <col style={{ width: '130px' }} />}
+      {hasAnyAction             && <col style={{ width: '100px' }} />}
+    </colgroup>
+    <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+      <tr>
+        {visibleColumns.id        && <th className={TH}>ID</th>}
+        {visibleColumns.title     && <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide">Title</th>}
+        {visibleColumns.type      && <th className={TH}>Type</th>}
+        {visibleColumns.state     && <th className={TH}>State</th>}
+        {visibleColumns.priority  && <th className={TH}>Priority</th>}
+        {visibleColumns.tags      && <th className={TH}>Tags</th>}
+        {visibleColumns.autoStatus && <th className={TH}>Auto Status</th>}
+        {hasAnyAction             && <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">Actions</th>}
+      </tr>
+    </thead>
+  </>
 );
 
 interface FolderSectionBlockProps {
@@ -123,7 +121,7 @@ const FolderSectionBlock: React.FC<FolderSectionBlockProps> = ({
 
       <div className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full table-fixed">
             <TableHeader visibleColumns={visibleColumns} hasAnyAction={hasAnyAction} />
             <tbody>
               {section.testCases.slice(0, visible).map((tc) => (

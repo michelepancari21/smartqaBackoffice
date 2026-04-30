@@ -56,6 +56,7 @@ const TestCasesFolderSidebar: React.FC<TestCasesFolderSidebarProps> = ({
             onEditFolder={onEditFolder}
             onDeleteFolder={onDeleteFolder}
             onTestCaseDropped={onTestCaseDropped}
+            showTestCaseCount={false}
           />
         </div>
       </div>

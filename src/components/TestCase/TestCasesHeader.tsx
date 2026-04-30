@@ -18,21 +18,17 @@ const TestCasesHeader: React.FC<TestCasesHeaderProps> = ({
     <div className="space-y-3">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-gray-400">
-        <span className="hover:text-slate-700 dark:hover:text-gray-200 cursor-pointer transition-colors">Projects</span>
+        <span>Projects</span>
         {selectedProject && (
           <>
             <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="hover:text-slate-700 dark:hover:text-gray-200 cursor-pointer transition-colors">
-              {selectedProject.name}
-            </span>
+            <span>{selectedProject.name}</span>
           </>
         )}
         {selectedFolder && (
           <>
             <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="hover:text-slate-700 dark:hover:text-gray-200 cursor-pointer transition-colors">
-              {selectedFolder.name}
-            </span>
+            <span>{selectedFolder.name}</span>
           </>
         )}
         <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
